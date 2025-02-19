@@ -1,0 +1,7 @@
+The manual for ngspice-44 is here!
+
+Since ngspice-21, we provide an elaborate manual.
+It's source is a lyx file plus tables and pictures, it's standard
+distribution is a pdf file. A xhtml version may be compiled as well.
+The manual actually uses Lyx 2.3.7 as its text processor, and
+Tex Live 2024 for background data.
