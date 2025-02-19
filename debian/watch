@@ -1,0 +1,22 @@
+# watch file for NGSpice
+
+# Upstream isn't doing any signed releases on
+#    https://sourceforge.net/projects/ngspice/files/ng-spice-rework/
+# By this and due the currently needed repacking for DFSG compliance
+# of the source tarball we can't use any cryptographic signature
+# verification and don't use 'pgpsigurlmangle'.
+
+# opts= ...
+# pgpsigurlmangle=s/archive\/(\d\S+)\.tar\.gz/releases\/download\/$1\/$1\.tar\.gz\.asc/ \
+# ...
+
+version=4
+
+opts="mode=git, \
+  uversionmangle=s/(\d)[_\.\-\+]?((RC|rc|pre|dev|beta|alpha)\.?\d*)$/$1~$2/; \
+                 s/\.\.//; \
+                 s/_/\./;  \
+                 s/-/\./,  \
+  dversionmangle=s/\+ds(\.?\d+)?$//" \
+  https://git.code.sf.net/p/ngspice/ngspice.git \
+  refs/tags/ngspice-(\d{2}(?:|\.\d+|_\d+|-\d))

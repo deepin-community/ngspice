@@ -1,0 +1,3 @@
+Tests: test-link
+Depends: build-essential, libngspice0-dev, pkg-config
+Restrictions: allow-stderr
