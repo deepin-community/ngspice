@@ -18,7 +18,7 @@ Copyright: various people
 License: BSD-3-clause
 
 Files: doc/*
-Copyright: 2018-2023, Holger Vogt, Marcel Hndrix, Paolo Nenzi
+Copyright: 2018-2026, Holger Vogt, Marcel Hndrix, Paolo Nenzi
 License: BSD-3-clause and CC-BY-SA-4.0 and public-domain
 
 Files: doc/INSTALL
@@ -257,6 +257,13 @@ Files: src/maths/deriv/*
 Copyright: 1988-1992, 1999, 2001, 2004-2006, 2010, 2017, Regents of the University of California.
 License: BSD-3-clause
 
+Files: src/maths/KLU/*
+Copyright: AMD, Copyright (c) Timothy A. Davis, Patrick R. Amestoy, Iain S. Duff
+  2004-2007, Tim Davis, University of Florida,
+  with support from Sandia National Laboratories.  All Rights Reserved.
+  2020, Francesco Lannutti
+License: LGPL-2
+
 Files: src/maths/misc/*
 Copyright: 1988-1992, 1999, 2001, 2004-2006, 2010, 2017, Regents of the University of California.
 License: BSD-3-clause
@@ -313,7 +320,6 @@ License: BSD-3-clause
 
 Files: src/spicelib/analysis/analysis.c
   src/spicelib/analysis/analysis.h
-  src/spicelib/analysis/cluster.c
   src/spicelib/analysis/dcpss.c
   src/spicelib/analysis/pssaskq.c
   src/spicelib/analysis/pssinit.c
@@ -329,10 +335,9 @@ Files: src/spicelib/devices/adms/*
 Copyright: various people
 License: GPL-2+
 
-Files: src/spicelib/devices/adms/admst/ngspiceMODULE.hxx.xml
-  src/spicelib/devices/adms/admst/ngspiceVersion.xml
+Files: src/spicelib/devices/adms/admst/*
 Copyright: various people
-License: BSD-3-clause
+License: GPL-3
 
 Files: src/spicelib/devices/asrc/asrcinit.c
   src/spicelib/devices/asrc/asrcinit.h
@@ -947,14 +952,6 @@ Files: src/xspice/icm/xtraevt/real/*
 Copyright: 1991, 1992, Georgia Tech Research Corporation
 License: BSD-3-clause
 
-Files: src/xspice/ipc/ipcsockets.c
-Copyright: 1991, Georgia Tech Research Corporation, Atlanta, Georgia 30332
-License: BSD-3-clause
-
-Files: src/xspice/ipc/ipcstdio.c
-Copyright: various people
-License: BSD-3-clause
-
 Files: src/xspice/mif/mifgetmod.c
 Copyright: Thomas L. Quarles and University of / 1991, Georgia Tech Research Corporation / 1985, Thomas L. Quarles
 License: BSD-3-clause
@@ -1332,6 +1329,14 @@ License: GPL-2+
  .
  On Debian systems, the complete text of version 2 of the GNU General
  Public License can be found in '/usr/share/common-licenses/GPL-2'.
+
+License: GPL-3
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; version 3 dated June, 2007.
+ .
+ On Debian systems, the complete text of version 3 of the GNU General
+ Public License can be found in '/usr/share/common-licenses/GPL-3'.
 
 License: LGPL-2
  This program is free software; you can redistribute it and/or modify it

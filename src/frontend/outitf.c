@@ -26,7 +26,6 @@ Modified: 2000 AlansFixes, 2013/2015 patch by Krzysztof Blaszkowski
 #include "variable.h"
 #include <fcntl.h>
 #include "ngspice/cktdefs.h"
-#include "ngspice/inpdefs.h"
 #include "breakp2.h"
 #include "runcoms.h"
 #include "plotting/graf.h"
@@ -38,6 +37,11 @@ extern int EVTsetup_plot(CKTcircuit* ckt, char* plotname);
 
 extern IFsimulator SIMinfo;
 extern char Spice_Build_Date[];
+
+extern unsigned long long getMemorySize(void);
+extern unsigned long long getPeakRSS(void);
+extern unsigned long long getCurrentRSS(void);
+extern unsigned long long getAvailableMemorySize(void);
 
 static int beginPlot(JOB *analysisPtr, CKTcircuit *circuitPtr, char *cktName, char *analName,
                      char *refName, int refType, int numNames, char **dataNames, int dataType,
@@ -61,6 +65,7 @@ static bool getSpecial(dataDesc *desc, runDesc *run, IFvalue *val);
 static void freeRun(runDesc *run);
 static int InterpFileAdd(runDesc *plotPtr, IFvalue *refValue, IFvalue *valuePtr);
 static int InterpPlotAdd(runDesc *plotPtr, IFvalue *refValue, IFvalue *valuePtr);
+static inline int vlength2delta(int len);
 
 /*Output data to spice module*/
 #ifdef TCL_MODULE
@@ -119,20 +124,6 @@ OUTpBeginPlot(CKTcircuit *circuitPtr, JOB *analysisPtr,
 }
 
 
-int
-OUTwBeginPlot(CKTcircuit *circuitPtr, JOB *analysisPtr,
-              IFuid analName,
-              IFuid refName, int refType,
-              int numNames, IFuid *dataNames, int dataType, runDesc **plotPtr)
-{
-
-    return (beginPlot(analysisPtr, circuitPtr, "circuit name",
-                      analName, refName, refType, numNames,
-                      dataNames, dataType, TRUE,
-                      plotPtr));
-}
-
-
 static int
 beginPlot(JOB *analysisPtr, CKTcircuit *circuitPtr, char *cktName, char *analName, char *refName, int refType, int numNames, char **dataNames, int dataType, bool windowed, runDesc **runp)
 {
@@ -146,12 +137,12 @@ beginPlot(JOB *analysisPtr, CKTcircuit *circuitPtr, char *cktName, char *analNam
     bool saveall  = TRUE;
     bool savealli = FALSE;
     bool savenosub = FALSE;
+    bool savenointernals = FALSE;
     char *an_name;
     int initmem;
-    /*to resume a run saj
-     *All it does is reassign the file pointer and return (requires *runp to be NULL if this is not needed)
-     */
 
+    /*to resume a run, Reassign the file pointer and return
+      (requires *runp to be NULL if this is not needed)*/
     if (dataType == 666 && numNames == 666) {
         run = *runp;
         run->writeOut = ft_getOutReq(&run->fp, &run->runPlot, &run->binary,
@@ -223,6 +214,13 @@ beginPlot(JOB *analysisPtr, CKTcircuit *circuitPtr, char *cktName, char *analNam
                     saves[i].used = 1;
                     continue;
                 }
+
+                if (cieq(saves[i].name, "nointernals")) {
+                    savenointernals = TRUE;
+                    savesused[i] = TRUE;
+                    saves[i].used = 1;
+                    continue;
+                }
 #ifdef SHARED_MODULE
                 /* this may happen if shared ngspice*/
                 if (cieq(saves[i].name, "none")) {
@@ -255,7 +253,7 @@ beginPlot(JOB *analysisPtr, CKTcircuit *circuitPtr, char *cktName, char *analNam
 
 
         /* Pass 1. */
-        if (numsaves && !saveall && !savenosub) {
+        if (numsaves && !saveall && !savenosub && !savenointernals) {
             for (i = 0; i < numsaves; i++) {
                 if (!savesused[i]) {
                     for (j = 0; j < numNames; j++) {
@@ -272,21 +270,32 @@ beginPlot(JOB *analysisPtr, CKTcircuit *circuitPtr, char *cktName, char *analNam
                             saves[i].used = 1;
                             break;
                         }
+                        else if (ft_ngdebug && refName && eq(refName, "time") && eq(saves[i].name, "deltacheck")) {
+                            addDataDesc(run, "deltacheck", IF_REAL, j, initmem);
+                            savesused[i] = TRUE;
+                            saves[i].used = 1;
+                            break;
+                        }
                     }
                 }
             }
         } else {
             for (i = 0; i < numNames; i++)
                 if (!refName || !name_eq(dataNames[i], refName))
-                    /*  Save the node as long as it's not an internal device node  */
-                    if (!(savenosub && strchr(dataNames[i], '.')) && /* don't save subckt nodes */
+                    /*  Save the node (with restrictions) */
+                        /* don't save subckt nodes */
+                    if (!(savenosub && strchr(dataNames[i], '.')) &&
+                        /* no internals at all, but still #branch */
+                        (!(savenointernals && strstr(dataNames[i], "#")) || strstr(dataNames[i], "#branch")) &&
+                        /* created by .probe */
+                        !strstr(dataNames[i], "probe_int_") &&
+                        /* don't save internal device nodes */
                         !strstr(dataNames[i], "#internal") &&
                         !strstr(dataNames[i], "#source") &&
                         !strstr(dataNames[i], "#drain") &&
                         !strstr(dataNames[i], "#collector") &&
                         !strstr(dataNames[i], "#collCX") &&
                         !strstr(dataNames[i], "#emitter") &&
-                        !strstr(dataNames[i], "probe_int_") && /* created by .probe */
                         !strstr(dataNames[i], "#base"))
                     {
                         addDataDesc(run, dataNames[i], dataType, i, initmem);
@@ -294,6 +303,7 @@ beginPlot(JOB *analysisPtr, CKTcircuit *circuitPtr, char *cktName, char *analNam
             /* generate a vector of real time information */
             if (ft_ngdebug && refName && eq(refName, "time")) {
                  addDataDesc(run, "speedcheck", IF_REAL, numNames, initmem);
+                 addDataDesc(run, "deltacheck", IF_REAL, numNames, initmem);
             }
         }
 
@@ -546,6 +556,20 @@ OUTpD_memory(runDesc *run, IFvalue *refValue, IFvalue *valuePtr)
 {
     int i, n = run->numData;
 
+    if (!cp_getvar("no_mem_check", CP_BOOL, NULL, 0)) {
+        /* Estimate the required memory */
+        size_t memrequ = (size_t)n * vlength2delta(0) * sizeof(double);
+        size_t memavail = getAvailableMemorySize();
+
+        if (memrequ > memavail) {
+            fprintf(stderr, "\nError: memory required (%Id Bytes)\n"
+                "       is more than memory available (%Id Bytes)!\n",
+                memrequ, memavail);
+            fprintf(stderr, "Setting the output memory is not possible.\n");
+            controlled_exit(1);
+        }
+    }
+
     for (i = 0; i < n; i++) {
 
         dataDesc *d;
@@ -568,6 +592,9 @@ OUTpD_memory(runDesc *run, IFvalue *refValue, IFvalue *valuePtr)
                 clock_t cl = clock();
                 double tt = ((double)cl - (double)startclock) / CLOCKS_PER_SEC;
                 plotAddRealValue(d, tt);
+            }
+            else if (ft_ngdebug && d->type == IF_REAL && eq(d->name, "deltacheck")) {
+                plotAddRealValue(d, ft_curckt->ci_ckt->CKTdeltaOld[0]);
             }
             else if (d->type == IF_REAL)
                 plotAddRealValue(d, valuePtr->v.vec.rVec[d->outIndex]);
@@ -610,6 +637,8 @@ OUTpData(runDesc *plotPtr, IFvalue *refValue, IFvalue *valuePtr)
 #endif
     /* interpolated batch mode output to file/plot in transient analysis */
     if (interpolated && run->circuit->CKTcurJob->JOBtype == 4) {
+        /* JOBtype == 4 means Transient Analysis.  FIX ME */
+
         if (run->writeOut) { /* To file */
             InterpFileAdd(run, refValue, valuePtr);
         }
@@ -617,10 +646,9 @@ OUTpData(runDesc *plotPtr, IFvalue *refValue, IFvalue *valuePtr)
             InterpPlotAdd(run, refValue, valuePtr);
         }
         return OK;
-    }
+    } else if (run->writeOut) {
+        /* standard batch mode output to file */
 
-    /* standard batch mode output to file */
-    else if (run->writeOut) {
         if (run->pointCount == 1) {
             fileInit_pass2(run);
         }
@@ -679,6 +707,9 @@ OUTpData(runDesc *plotPtr, IFvalue *refValue, IFvalue *valuePtr)
                     double tt = ((double)cl - (double)startclock) / CLOCKS_PER_SEC;
                     fileAddRealValue(run->fp, run->binary, tt);
                 }
+                else if (ft_ngdebug && run->data[i].type == IF_REAL && eq(run->data[i].name, "deltacheck")) {
+                    fileAddRealValue(run->fp, run->binary, ft_curckt->ci_ckt->CKTdeltaOld[0]);
+                }
                 else if (run->data[i].type == IF_REAL)
                     fileAddRealValue(run->fp, run->binary,
                             valuePtr->v.vec.rVec [run->data[i].outIndex]);
@@ -724,7 +755,6 @@ OUTpData(runDesc *plotPtr, IFvalue *refValue, IFvalue *valuePtr)
 #ifdef TCL_MODULE
             blt_add(i, valuePtr->v.vec.rVec [run->data[i].outIndex]);
 #endif
-
         }
 
         fileEndPoint(run->fp, run->binary);
@@ -776,38 +806,6 @@ OUTpData(runDesc *plotPtr, IFvalue *refValue, IFvalue *valuePtr)
 } /* end of function OUTpData */
 
 
-
-int OUTwReference(runDesc*plotPtr, IFvalue *valuePtr, void **refPtr)
-{
-    NG_IGNORE(refPtr);
-    NG_IGNORE(valuePtr);
-    NG_IGNORE(plotPtr);
-
-    return OK;
-}
-
-
-int
-OUTwData(runDesc *plotPtr, int dataIndex, IFvalue *valuePtr, void *refPtr)
-{
-    NG_IGNORE(refPtr);
-    NG_IGNORE(valuePtr);
-    NG_IGNORE(dataIndex);
-    NG_IGNORE(plotPtr);
-
-    return OK;
-}
-
-
-int
-OUTwEnd(runDesc *plotPtr)
-{
-    NG_IGNORE(plotPtr);
-
-    return OK;
-}
-
-
 int
 OUTendPlot(runDesc *plotPtr)
 {
@@ -822,27 +820,6 @@ OUTendPlot(runDesc *plotPtr)
     tfree(valuenew);
 
     freeRun(plotPtr);
-
-    return (OK);
-}
-
-
-int
-OUTbeginDomain(runDesc *plotPtr, IFuid refName, int refType, IFvalue *outerRefValue)
-{
-    NG_IGNORE(outerRefValue);
-    NG_IGNORE(refType);
-    NG_IGNORE(refName);
-    NG_IGNORE(plotPtr);
-
-    return (OK);
-}
-
-
-int
-OUTendDomain(runDesc *plotPtr)
-{
-    NG_IGNORE(plotPtr);
 
     return (OK);
 }
@@ -944,8 +921,9 @@ fileInit(runDesc *run)
 }
 
 /* Trying to guess the type of a vector, using either their special names
-   or special parameter names for @ vecors. FIXME This guessing may fail
-   due to the many options, especially for the @ vectors. */
+   or special parameter names for @ vectors. FIXME This guessing may fail
+   due to the many options, especially for the @ vectors. pltypename
+   may be run->type in batch mode or the plot name in control mode. */
 static int
 guess_type(const char *name, char* pltypename)
 {
@@ -956,6 +934,8 @@ guess_type(const char *name, char* pltypename)
     else if (cieq(name, "time"))
         type = SV_TIME;
     else if ( cieq(name, "speedcheck"))
+        type = SV_TIME;
+    else if ( cieq(name, "deltacheck"))
         type = SV_TIME;
     else if (cieq(name, "frequency"))
         type = SV_FREQUENCY;
@@ -1012,13 +992,15 @@ static void
 fileInit_pass2(runDesc *run)
 {
     int i, type;
+
     bool keepbranch = cp_getvar("keep#branch", CP_BOOL, NULL, 0);
 
     for (i = 0; i < run->numData; i++) {
 
         char *name = run->data[i].name;
 
-        type = guess_type(name, NULL);
+        /* Use run->type to detect SP analysis */
+        type = guess_type(name, run->type);
 
         if (type == SV_CURRENT && !keepbranch) {
             char *branch = strstr(name, "#branch");
@@ -1157,6 +1139,7 @@ plotInit(runDesc *run)
         else
             name = copy(dd->name);
 
+        /* Use pl->pl_typename to detect SP analysis */
         v = dvec_alloc(name,
                        guess_type(name, pl->pl_typename),
                        run->isComplex
@@ -1218,12 +1201,9 @@ vlength2delta(int len)
         return 1024;
 }
 
-
-static void
-plotAddRealValue(dataDesc *desc, double value)
+void
+AddRealValueToVector(struct dvec *v, double value)
 {
-    struct dvec *v = desc->vec;
-
 #ifdef SHARED_MODULE
     if (savenone)
         /* always save new data to same location */
@@ -1245,6 +1225,11 @@ plotAddRealValue(dataDesc *desc, double value)
     v->v_dims[0] = v->v_length; /* va, must be updated */
 }
 
+static void
+plotAddRealValue(dataDesc *desc, double value)
+{
+    AddRealValueToVector(desc->vec, value);
+}
 
 static void
 plotAddComplexValue(dataDesc *desc, IFcomplex value)

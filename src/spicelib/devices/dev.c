@@ -58,6 +58,7 @@ static void free_dlerr_msg(char *msg);
 #define RTLD_NOW    2 /* immediate function call binding */
 #define RTLD_GLOBAL 4 /* symbols in this dlopen'ed obj are visible to other
                        * dlopen'ed objs */
+#define F_OK 0
 #endif /* ifndef HAS_WINGUI */
 
 #include "ngspice/dllitf.h" /* the coreInfo Structure*/
@@ -126,16 +127,6 @@ extern struct coreInfo_t  coreInfo; /* cmexport.c */
 #include "vcvs/vcvsitf.h"
 #include "vsrc/vsrcitf.h"
 #include "vdmos/vdmositf.h"
-#ifdef ADMS
-#include "adms/hicum0/hicum0itf.h"
-#include "adms/mextram/bjt504titf.h"
-#include "adms/ekv/ekvitf.h"
-#include "adms/psp102/psp102itf.h"
-#include "adms/psp103/psp103itf.h"
-#include "adms/bsimbulk/bsimbulkitf.h"
-#include "adms/bsimcmg/bsimcmgitf.h"
-#include "adms/r2_cmc/r2_cmcitf.h"
-#endif
 #ifdef CIDER
 /* Numerical devices (Cider integration) */
 #include "nbjt/nbjtitf.h"
@@ -209,17 +200,6 @@ static SPICEdev *(*static_devices[])(void) = {
     get_numd_info,
     get_numd2_info,
     get_numos_info,
-#endif
-
-#ifdef ADMS
-    (SPICEdev *(*)(void)) get_hicum0_info,
-    (SPICEdev *(*)(void)) get_bjt504t_info,
-    (SPICEdev *(*)(void)) get_ekv_info,
-    (SPICEdev *(*)(void)) get_psp102_info,
-    (SPICEdev *(*)(void)) get_psp103_info,
-    (SPICEdev *(*)(void)) get_bsimbulk_info,
-    (SPICEdev *(*)(void)) get_bsimcmg_info,
-    (SPICEdev *(*)(void)) get_r2_cmc_info,
 #endif
 
 #ifdef NDEV
@@ -303,17 +283,12 @@ SPICEdev ** devices(void)
 #ifdef DEVLIB
 /*not yet usable*/
 
-#ifdef ADMS
-#define DEVICES_USED {"asrc", "bjt", "vbic", "bsim1", "bsim2", "bsim3", "bsim3v32", "bsim3v2", "bsim3v1", "bsim4", "bsim4v5", "bsim4v6", "bsim4v7", \
-                      "bsim4soi", "bsim3soipd", "bsim3soifd", "bsim3soidd", "hisim2", "hisimhv1",  "hisimhv2", \
-                      "cap", "cccs", "ccvs", "csw", "dio", "hfet", "hfet2", "ind", "isrc", "jfet", "ltra", "mes", "mesa" ,"mos1", "mos2", "mos3", \
-                      "mos6", "mos9", "res", "soi3", "sw", "tra", "urc", "vccs", "vcvs", "vsrc", "hicum0", "bjt504t", "ekv", "psp102", "psp103", "bsimbulk", "bsimcmg"}
-#else
+
 #define DEVICES_USED {"asrc", "bjt", "vbic", "bsim1", "bsim2", "bsim3", "bsim3v32", "bsim3v2", "bsim3v1", "bsim4", "bsim4v5", "bsim4v6", "bsim4v7", \
                       "bsim4soi", "bsim3soipd", "bsim3soifd", "bsim3soidd", "hisim2", "hisimhv1", "hisimhv2", \
                       "cap", "cccs", "ccvs", "csw", "dio", "hfet", "hfet2", "ind", "isrc", "jfet", "ltra", "mes", "mesa" ,"mos1", "mos2", "mos3", \
                       "mos6", "mos9", "res", "soi3", "sw", "tra", "urc", "vccs", "vcvs", "vsrc", "hicum2"}
-#endif
+
 int load_dev(char *name) {
   char *msg;
   char libname[50];
@@ -431,9 +406,14 @@ int load_opus(const char *name)
     lib = dlopen(name, RTLD_NOW);
 //    fprintf(stdout, "Lib %s has handle %p\n", name, lib);
     if (!lib) {
-        msg = dlerror();
-        fprintf(stderr, "Error opening code model \"%s\"\n: %s\n", name, msg);
-        FREE_DLERR_MSG(msg);
+        int acc = access(name, F_OK);
+        if (acc != 0) {
+            fprintf(stderr, "Error opening code model \"%s\": No such file or directory!\n",
+                name);
+        }
+        else
+            fprintf(stderr, "Error opening code model \"%s\"\n", name);
+
         return 1;
     }
 
@@ -609,10 +589,10 @@ static int osdi_add_device(int n, OsdiRegistryEntry *devs) {
   DEVicesfl = TREALLOC(int, DEVicesfl, dnum);
 #endif
   for (i = 0; i < n; i++) {
-#ifdef TRACE
-    printf("Added device: %s\n", devs[i]->DEVpublic.name);
-#endif
     DEVices[DEVNUM + i] = osdi_create_spicedev(&devs[i]);
+#ifdef TRACE
+    printf("Added device: %s\n", DEVices[DEVNUM + i]->DEVpublic.name);
+#endif
   }
   DEVNUM += n;
   relink();

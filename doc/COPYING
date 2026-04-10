@@ -1,6 +1,6 @@
 12345678901234567890123456789012345678901234567890123456789012345678901234567890
-Ngspice-40 Documentation
-Copyright (c) 2023, Holger Vogt, Giles Atkinson, Dietmar Warning, Paolo Nenzi
+Ngspice-45 Documentation
+Copyright (c) 2025, Holger Vogt, Giles Atkinson, Dietmar Warning, Paolo Nenzi
 All rights reserved.
 
 
@@ -19,6 +19,6 @@ This document is covered by the
 Creative Commons Attribution Share-Alike (CC-BY-SA) v4.0 
 (see https://creativecommons.org/licenses/by-sa/4.0/).
 
-Parts of chapters 12 and 25-27 are in the public domain.
+Parts of chapters 12 and 21-25 are in the public domain.
 
-Chapter 30 on CIDER is covered by New BSD.
+Chapter 26 on CIDER is covered by New BSD.

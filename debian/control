@@ -1,6 +1,5 @@
 Source: ngspice
 Section: electronics
-Priority: optional
 Maintainer: Debian Electronics Team <pkg-electronics-devel@alioth-lists.debian.net>
 Uploaders:
  Gudjon I. Gudjonsson <gudjon@gudjon.org>,
@@ -25,14 +24,14 @@ Build-Depends:
  tk8.6-dev,
 Build-Depends-Indep:
  imagemagick,
- lyx (>= 2.2),
+ lyx (>= 2.4),
  texlive,
  texlive-lang-greek,
  texlive-latex-extra,
  texlive-plain-generic,
  texlive-science,
 Rules-Requires-Root: binary-targets
-Standards-Version: 4.7.0
+Standards-Version: 4.7.3
 Vcs-Browser: https://salsa.debian.org/electronics-team/ngspice
 Vcs-Git: https://salsa.debian.org/electronics-team/ngspice.git
 Homepage: https://ngspice.sourceforge.io

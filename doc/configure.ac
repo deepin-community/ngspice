@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 # configure.ac for ngspice-doc
 
-# Copyright (C) 2025 Holger Vogt
+# Copyright (C) 2026 Holger Vogt
 #           (C) 2018 Carsten Schoenert <c.schoenert@...>
 #
 # This file is part of the ngspice-doc. Please see README and COPYING for
@@ -13,7 +13,7 @@
 # To regenerate the configure script call
 #    autoreconf  -vi
 
-AC_INIT(ngspice-doc,44,[http://ngspice.sourceforge.net/bugrep.html])
+AC_INIT(ngspice-doc,46,[http://ngspice.sourceforge.net/bugrep.html])
 AC_PREREQ(2.61)
 
 AC_CONFIG_AUX_DIR(config)
@@ -22,7 +22,7 @@ AM_INIT_AUTOMAKE
 
 # The minimum required LyX version for building the documentation.
 # This is the LyX version the file manual.lyx was created with.
-lyx_version_required=2.3
+lyx_version_required=2.4
 
 AC_CHECK_PROG([LYX],
               lyx,

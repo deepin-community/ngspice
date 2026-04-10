@@ -1,3 +1,34 @@
+ngspice (46+ds-1) unstable; urgency=medium
+
+  * [401e55f] d/control: Bump B-D on lyx to 2.4
+  * [89fb3ed] New upstream version 46+ds
+  * [4047ba3] Drop current patch queue
+  * [45ca9f8] d/control: Drop field Priority: optional
+  * [4aa3ade] d/control: Update Standards-Version to 4.7.3
+    No further changes needed.
+  * [13c8780] d/copyright: Update the copyright information
+  * [8b283ef] autopkgtest: Use pkgconf instead of pkg-config
+
+ -- Carsten Schoenert <c.schoenert@t-online.de>  Mon, 30 Mar 2026 20:29:25 +0200
+
+ngspice (45.2+ds-1) unstable; urgency=medium
+
+  * [157fa47] d/watch: Convert to version 5
+  * [31f0511] New upstream version 45.2+ds
+  * [cd5bc04] Rebuild patch queue from patch-queue branch
+    Added patches:
+    fixes/spelling-Fix-misspelled-word-occurred.patch
+  * [f3135fa] d/copyright: Update the copyright information
+  * [3b97d81] d/control: Increase Standards-Version to 4.7.2
+    No further changes needed.
+  * [3351f3a] d/ngspice.install.in: Install also scripts/ghnggen
+  * [1039af9] d/libngspice0.symbols: Add new symbols in 45.2+ds
+  * [0042a74] d/tclspice.lintian-overrides: Add additional override
+  * [5cb2a01] d/libngspice0.lintian-overrides: Additional override
+  * [6acbce8] d/rules: Also remove executable permission on *.cm files
+
+ -- Carsten Schoenert <c.schoenert@t-online.de>  Fri, 12 Sep 2025 13:58:13 +0200
+
 ngspice (44.2+ds-1) unstable; urgency=medium
 
   * [edd6342] New upstream version 44.2+ds

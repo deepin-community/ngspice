@@ -14,6 +14,7 @@ Author: 1985 Wayne A. Christopher, U. C. Berkeley CAD Group
 #include "ngspice/ngspice.h"
 #include "ngspice/cpdefs.h"
 #include "ngspice/ftedefs.h"
+#include "ngspice/devdefs.h"
 
 #include "circuits.h"
 #include "resource.h"
@@ -212,14 +213,6 @@ printres(char *name)
             called = TRUE;
         }
 
-#ifdef XSPICE
-        /* gtri - add - 12/12/90 - wbk - record cpu time used for ipc */
-        g_ipc.cpu_time = (double) last_msec;
-        g_ipc.cpu_time /= 1000.0;
-        g_ipc.cpu_time += (double) last_sec;
-        /* gtri - end - 12/12/90 */
-#endif
-
         yy = TRUE;
 #else
         if (!name || eq(name, "totalcputime"))
@@ -325,6 +318,21 @@ printres(char *name)
 
     /* Now get all the spice resource stuff. */
     if (ft_curckt && ft_curckt->ci_ckt) {
+        if (name && eq(name, "devtimes")) {
+            /* Per-device timings */
+            for(int i=0; i<=DEVmaxnum; i++) {
+                if (ft_curckt->ci_ckt->CKTstat->devCounts[i]==0) {
+                    continue;
+                }
+                fprintf(cp_out, "%s: t=%f n=%ld t/n=%e\n", 
+                    (i==DEVmaxnum ? "\noverhead" : DEVices[i]->DEVpublic.name), 
+                    ft_curckt->ci_ckt->CKTstat->devTimes[i], 
+                    ft_curckt->ci_ckt->CKTstat->devCounts[i], 
+                    ft_curckt->ci_ckt->CKTstat->devTimes[i]/(double)(ft_curckt->ci_ckt->CKTstat->devCounts[i])
+                );
+            }
+            yy = TRUE;
+        }
 
 #ifdef CIDER
 /* begin cider integration */
@@ -534,6 +542,7 @@ static int get_sysmem(struct sys_mem *memall)
 #else
 
 
+#  ifdef notdef
 #include <signal.h>
 #include <setjmp.h>
 
@@ -609,6 +618,7 @@ baseaddr(void)
 
 #endif
 }
+#endif
 
 
 #endif

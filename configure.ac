@@ -14,9 +14,9 @@
 # Ensure a recent version of Autoconf is in use
 # Older versions may not work with this script and this will report the
 # problem to the user.
-AC_PREREQ([2.59])
+AC_PREREQ([2.70])
 
-m4_define([ngspice_major_version], [44.2])
+m4_define([ngspice_major_version], [46])
 m4_define([ngspice_minor_version], [0])
 m4_define([ngspice_version],
       [ngspice_major_version])
@@ -117,7 +117,7 @@ LT_INIT([shared static])
 #  --> Set 'LT_NGSPICE_AGE' to 0.
 
 LT_NGSPICE_CURRENT=0
-LT_NGSPICE_REVISION=12
+LT_NGSPICE_REVISION=15
 LT_NGSPICE_AGE=0
 LIBNGSPICE_SO_VERSION=$LT_NGSPICE_CURRENT.$LT_NGSPICE_REVISION.$LT_NGSPICE_AGE
 
@@ -229,10 +229,6 @@ AC_ARG_ENABLE([predictor],
 AC_ARG_ENABLE([newpred],
     [AS_HELP_STRING([--enable-newpred], [Enable NEWPRED whatever it is(?)])])
 
-# --enable-newtrunc: define NEWTRUNC for the code
-AC_ARG_ENABLE([newtrunc],
-    [AS_HELP_STRING([--enable-newtrunc], [Enable, how we want extrapolate capacitances.])])
-
 # --enable-sense2: define WANT_SENSE2 for the code
 AC_ARG_ENABLE([sense2],
     [AS_HELP_STRING([--enable-sense2], [Use spice2 sensitivity analysis.])])
@@ -284,10 +280,6 @@ AC_ARG_ENABLE([expdevices],
 # --enable-ndev: define NDEV in the code. An interface for external device i.e. numerical device
 AC_ARG_ENABLE([ndev],
     [AS_HELP_STRING([--enable-ndev], [Enable NDEV interface, (experimental)])])
-
-# --enable-cluster: define CLUSTER in the code. This is for cluster support
-AC_ARG_ENABLE([cluster],
-    [AS_HELP_STRING([--enable-cluster], [Enable cluster support, (experimental)])])
 
 # --enable-cmathtests: run the ancient tests in src/math/cmaths
 AC_ARG_ENABLE([cmathtests],
@@ -967,11 +959,12 @@ fi
 # A trivial AC_CHECK_FUNCS(sigsetjmp) won't do because sigsetjmp() might be a
 # macro declared in <setjmp.h>. (joze)
 AC_MSG_CHECKING([for sigsetjmp])
-AC_TRY_LINK([#include <setjmp.h>],[jmp_buf env; sigsetjmp(env, 1);],
-    [AC_MSG_RESULT([yes])
+AC_LINK_IFELSE(
+     [AC_LANG_PROGRAM([[#include <setjmp.h>]],
+                      [[jmp_buf env; sigsetjmp(env, 1);]])],
+     [AC_MSG_RESULT([yes])
         AC_DEFINE([HAVE_SIGSETJMP], [], [Define if we have sigsetjmp().])],
-    [AC_MSG_RESULT([no])])
-
+     [AC_MSG_RESULT([no])])
 
 # Check for the snprintf function:
 AC_CHECK_FUNCS([snprintf])
@@ -1047,10 +1040,6 @@ if test "x$enable_newpred" = xyes; then
     AC_DEFINE([NEWPRED], [], [Define if you want to discover :)])
     AC_MSG_RESULT([NEWPRED enabled])
 fi
-if test "x$enable_newtrunc" = xyes; then
-    AC_DEFINE([NEWTRUNC], [], [Do not trigger unwanted traps by default])
-    AC_MSG_RESULT([New truncation error calculation enabled])
-fi
 if test "x$enable_experimental" = xyes; then
     AC_DEFINE([EXPERIMENTAL_CODE], [], [Define if we want some experimental code])
     AC_MSG_RESULT([EXPERIMENTAL_CODE enabled])
@@ -1101,7 +1090,7 @@ AC_PATH_PROG([BISON], [bison])
 AX_PROG_BISON_VERSION([2.7], [],
     [AC_DEFINE([OLD_BISON], [], [Bison is older than 2.7]),
      AC_MSG_WARN([Bison is older than 2.7])])
-AC_PROG_LEX
+AC_PROG_LEX(noyywrap)
 
 AM_CONDITIONAL([CMATHTESTS], [test "x$enable_cmathtests" = xyes])
 
@@ -1183,7 +1172,7 @@ if test "x$enable_osdi" = xno; then
     AC_MSG_RESULT([OSDI interface disabled])
 else
     AC_DEFUN([AX_CHECK_COMPILE_FLAG],
-    [AC_PREREQ(2.64)dnl for _AC_LANG_PREFIX and AS_VAR_IF
+    [AC_PREREQ([2.70])dnl for _AC_LANG_PREFIX and AS_VAR_IF
     AS_VAR_PUSHDEF([CACHEVAR],[ax_cv_check_[]_AC_LANG_ABBREV[]flags_$4_$1])dnl
     AC_CACHE_CHECK([whether _AC_LANG compiler accepts $1], CACHEVAR, [
       ax_check_save_flags=$[]_AC_LANG_PREFIX[]FLAGS
@@ -1243,14 +1232,6 @@ if test "x$enable_ndev" = xyes; then
 fi
 AM_CONDITIONAL([NDEV_WANTED], [test "x$enable_ndev" = xyes])
 
-
-# Cluster option
-if test "x$enable_cluster" = xyes; then
-    AC_MSG_RESULT([Cluster version is being compiled])
-    AC_DEFINE([CLUSTER], [], [Spice cluster support])
-    LIBS="$LIBS -lpthread"
-fi
-
 if test "x$enable_expdevices" = xyes; then
     AC_DEFINE([EXP_DEV], [], [Define if we want to enable experimental devices])
     AC_MSG_RESULT([WARNING: Experimental devices enabled])
@@ -1273,7 +1254,7 @@ else
                 AC_CHECK_HEADERS([readline/readline.h readline/history.h],
                     [AC_DEFINE([HAVE_GNUREADLINE], [], [Define if we have GNU readline])],
                     [AC_MSG_ERROR([Couldn't find GNU readline headers.])])
-                AC_SEARCH_LIBS([tputs], [ncurses tinfo termcap],
+                AC_SEARCH_LIBS([tputs], [tinfo termcap ncurses],
                     [AC_DEFINE([HAVE_TERMCAP], [], [Define if we have ncurses/terminfo or termcap])],
                     [AC_MSG_ERROR([Found neither ncurses/terminfo or termcap])])
                 AC_CHECK_LIB([readline], [readline],
@@ -1286,16 +1267,16 @@ else
                 $with_readline
                 do
                     if test "x$with_tcl" = x  ||  test "x$with_tcl" = xno ; then
-                        AC_MSG_RESULT([Checking for readline:])
-                        AC_CHECK_HEADERS([$dir/include/readline/readline.h $dir/include/readline/history.h],
-                            [AC_DEFINE([HAVE_GNUREADLINE], [], [Define if we have GNU readline])],
-                            [AC_MSG_ERROR([Couldn't find GNU readline headers.])])
-                        AC_SEARCH_LIBS([tputs], [ncurses tinfo termcap],
-                            [AC_DEFINE([HAVE_TERMCAP], [], [Define if we have ncurses/terminfo or termcap])],
-                            [AC_MSG_ERROR([Found neither ncurses/terminfo or termcap])])
-                        AC_CHECK_LIB([readline], [readline],
-                            [LIBS="$LIBS -lreadline"],
-                            [AC_MSG_ERROR([Couldn't find readline libraries.])])
+		       if test -f $dir/include/readline/readline.h && test -f $dir/include/readline/history.h ; then
+
+                            AC_DEFINE([HAVE_GNUREADLINE], [], [Define if we have GNU readline])
+			    AC_SEARCH_LIBS([tputs], [tinfo termcap ncurses],
+			        [AC_DEFINE([HAVE_TERMCAP], [], [Define if we have ncurses/terminfo or termcap])],
+				[AC_MSG_ERROR([Found neither ncurses/terminfo or termcap])])
+			    AC_CHECK_LIB([readline], [readline],
+				[LIBS="$LIBS -lreadline"],
+				[AC_MSG_ERROR([Couldn't find readline libraries.])])
+			fi
                     fi
                 done
         fi
@@ -1311,7 +1292,7 @@ else
         AC_CHECK_HEADERS([editline/readline.h],
             [AC_DEFINE([HAVE_BSDEDITLINE], [1], [Define to enable BSD editline])],
             [AC_MSG_ERROR([Couldn't find BSD editline headers.])])
-        AC_SEARCH_LIBS([tputs], [ncurses tinfo termcap],
+        AC_SEARCH_LIBS([tputs], [tinfo termcap ncurses],
             [AC_DEFINE([HAVE_TERMCAP], [], [Define if we have ncurses/terminfo or termcap])],
             [AC_MSG_ERROR([Found neither ncurses/terminfo or termcap])])
         AC_CHECK_LIB([edit], [readline],
@@ -1322,13 +1303,8 @@ else
 fi
 
 # Use AC_CHECK_HEADERS so the HAVE_*_H symbol gets defined
-AC_CHECK_HEADERS([ncurses/termcap.h termcap.h])
+AC_CHECK_HEADERS([ncurses/termcap.h termcap.h term.h])
 AC_CHECK_HEADERS([sys/sysctl.h])
-
-
-# --enable-openmp: Use OpenMP on multi-core processors
-AC_ARG_ENABLE([openmp],
-    [AS_HELP_STRING([--enable-openmp], [Use OpenMP parallel processing])])
 
 # Add OpenMP to ngspice.
 : ${enable_openmp:=yes}
@@ -1444,9 +1420,9 @@ AC_CONFIG_FILES([Makefile
                  src/xspice/mif/Makefile
                  src/xspice/evt/Makefile
                  src/xspice/enh/Makefile
-                 src/xspice/ipc/Makefile
                  src/xspice/idn/Makefile
                  src/xspice/verilog/Makefile
+                 src/xspice/vhdl/Makefile
                  src/osdi/Makefile
                  tests/Makefile
                  tests/bsim1/Makefile

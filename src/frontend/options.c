@@ -23,8 +23,9 @@ Author: 1985 Wayne A. Christopher, U. C. Berkeley CAD Group
 
 bool ft_acctprint = FALSE, ft_noacctprint = FALSE, ft_listprint = FALSE;
 bool ft_nodesprint = FALSE, ft_optsprint = FALSE, ft_noinitprint = FALSE;
-bool ft_norefprint = FALSE, ft_skywaterpdk = FALSE;
+bool ft_norefprint = FALSE;
 bool ft_ngdebug = FALSE, ft_nginfo = FALSE, ft_stricterror = FALSE, ft_spiniterror = FALSE;
+bool ft_codemodelerror = FALSE, ft_osdierror = FALSE;
 
 static void setdb(char *str);
 static struct variable *cp_enqvec_as_var(const char *vec_name,
@@ -308,8 +309,6 @@ cp_usrset(struct variable *var, bool isset)
         ft_ngdebug = isset;
     } else if (eq(var->va_name, "nginfo")) {
         ft_nginfo = isset;
-    } else if (eq(var->va_name, "skywaterpdk")) {
-        ft_skywaterpdk = isset;
     } else if (eq(var->va_name, "noinit")) {
         ft_noinitprint = isset;
     } else if (eq(var->va_name, "norefvalue")) {
@@ -330,7 +329,7 @@ cp_usrset(struct variable *var, bool isset)
         ft_stricterror = isset;
         if (ft_ngdebug)
             fprintf(stdout, "Note: strict_errorhandling is set\n");
-        /* Immediately bail out when spinit error has occured */
+        /* Immediately bail out when spinit error has occurred */
         if (ft_spiniterror)
             controlled_exit(EXIT_BAD);
     } else if (eq(var->va_name, "rawfileprec")) {
@@ -342,6 +341,16 @@ cp_usrset(struct variable *var, bool isset)
             raw_prec = var->va_num;
         else
             fprintf(cp_err, "Bad 'rawfileprec' \"%s\"\n", var->va_name);
+    }
+    else if (eq(var->va_name, "measureprec")) {
+        if ((var->va_type == CP_BOOL) && (isset == FALSE))
+            measure_precision = -1;
+        else if (var->va_type == CP_REAL)
+            measure_precision = (int)floor(var->va_real + 0.5);
+        else if (var->va_type == CP_NUM)
+            measure_precision = var->va_num;
+        else
+            fprintf(cp_err, "Bad 'measureprec' \"%s\"\n", var->va_name);
     } else if (eq(var->va_name, "numdgt")) {
         if ((var->va_type == CP_BOOL) && (isset == FALSE))
             cp_numdgt = -1;
@@ -350,7 +359,7 @@ cp_usrset(struct variable *var, bool isset)
         else if (var->va_type == CP_NUM)
             cp_numdgt = var->va_num;
         else
-            fprintf(cp_err, "Excuse me??\n");
+            fprintf(cp_err, "Bad 'numdgt' \"%s\"\n", var->va_name);
     } else if (eq(var->va_name, "unixcom")) {
         cp_dounixcom = isset;
         if (isset) {

@@ -23,7 +23,7 @@ USAGE:
 REQUIREMENTS:
 =============
   You need:
-    `LyX 2.3.7' `TeX' and something like `texlive-lang-greek'
+    `LyX 2.4' `TeX' and something like `texlive-lang-greek'
   You need:
     `GNU make'
 

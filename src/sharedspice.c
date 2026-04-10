@@ -182,6 +182,8 @@ typedef void (*sighandler)(int);
 
 #ifdef XSPICE
 #include "ngspice/evtshared.h"
+#include "ngspice/evtproto.h"
+#include "ngspice/evtudn.h"
 extern bool wantevtdata;
 #endif
 
@@ -222,7 +224,7 @@ extern struct comm spcp_coms[];
 struct comm* cp_coms = spcp_coms;
 
 /* Main options */
-static bool ft_servermode = FALSE;
+
 bool ft_batchmode = FALSE;
 bool ft_pipemode = FALSE;
 bool rflag = FALSE; /* has rawfile */
@@ -256,13 +258,7 @@ IFfrontEnd nutmeginfo = {
     OUTerrorf,
     OUTpBeginPlot,
     OUTpData,
-    OUTwBeginPlot,
-    OUTwReference,
-    OUTwData,
-    OUTwEnd,
     OUTendPlot,
-    OUTbeginDomain,
-    OUTendDomain,
     OUTattributes
 };
 
@@ -341,6 +337,8 @@ void sh_delete_myvec(void);
 #ifdef XSPICE
 void shared_send_event(int, double, double, char *, void *, int, int);
 void shared_send_dict(int, int, char*, char*);
+
+static int evt_shim(double time, Mif_Value_t *vp, void *ctx, int last);
 #endif
 
 #if !defined(low_latency)
@@ -397,6 +395,7 @@ static int intermj = 1;
 #ifdef XSPICE
 static SendInitEvtData* sendinitevt;
 static SendEvtData* sendevt;
+static SendRawEvtData *sendrawevt;
 #endif
 static void* euserptr;
 static wordlist *shcontrols;
@@ -975,13 +974,26 @@ ngSpice_Init(SendChar* printfcn, SendStat* statusfcn, ControlledExit* ngspiceexi
     }
 #else /* ~ HAVE_PWD_H */
     /* load user's initialisation file
-       try accessing the initialisation file .spiceinit in a user provided
-       path read from environmental variable SPICE_USERINIT_DIR,
-       if that fails try the alternate name spice.rc, then look into
-       the current directory, then the HOME directory, then into USERPROFILE.
-       Don't read .spiceinit, if ngSpice_nospiceinit() has been called. */
+      try accessing the initialisation file .spiceinit
+      (If it fails, try the alternate name spice.rc):
+      - in the directory Infile_Path received from the caller (sent before initialization)
+      - in a user provided path read from environmental variable SPICE_USERINIT_DIR,
+      - in the current directory,
+      - in the the HOME directory,
+      - in the USERPROFILE directory.
+      Don't read .spiceinit, if ngSpice_nospiceinit() has been called. */
     if (!cp_getvar("no_spiceinit", CP_BOOL, NULL, 0)) {
         do {
+            {
+                if (Infile_Path) {
+                    if (read_initialisation_file(Infile_Path, INITSTR) != FALSE) {
+                        break;
+                    }
+                    if (read_initialisation_file(Infile_Path, ALT_INITSTR) != FALSE) {
+                        break;
+                    }
+                }
+            }
             {
                 const char* const userinit = getenv("SPICE_USERINIT_DIR");
                 if (userinit) {
@@ -1169,6 +1181,9 @@ pvector_info  ngGet_Vec_Info(char* vecname)
 {
     struct dvec* newvec;
 
+    if (ft_ngdebug)
+        fprintf(stdout, "\nGet vector info: searching for vector '%s'\n", vecname);
+
     if (!is_initialized) {
         fprintf(stderr, no_init);
         return NULL;
@@ -1186,11 +1201,11 @@ pvector_info  ngGet_Vec_Info(char* vecname)
     newvec = vec_get(vecname);
 
     if (newvec == NULL) {
-        fprintf(stderr, "Error: vector %s not found!\n", vecname);
+        fprintf(stderr, "Warning: vector %s not or not yet available!\n", vecname);
         return NULL;
     }
     if (newvec->v_numdims > 1) {
-        fprintf(stderr, "Error: vector %s is multidimensional!\n  This is not yet handled\n!", vecname);
+        fprintf(stderr, "Warning: vector %s is multidimensional!\n  This is not yet handled\n!", vecname);
         return NULL;
     }
 
@@ -1371,6 +1386,41 @@ int  ngSpice_Init_Evt(SendEvtData* sevtdata, SendInitEvtData* sinitevtdata, void
     return(TRUE);
 }
 
+/* Set callback address for raw XSPICE events.
+ * The return value identifies the node data type or is -1 on error.
+ */
+
+IMPEXP
+int  ngSpice_Raw_Evt(const char* node, SendRawEvtData* srawevt, void* userData)
+{
+    struct node_parse np;
+
+    if (Evt_Parse_Node(node, &np) < 0 || np.member)
+        return -1; // Invalid node name.
+    sendrawevt = srawevt;
+    EVTnew_value_call(node, evt_shim, Evt_Cbt_Raw, userData);
+    return np.udn_index;
+}
+
+IMPEXP
+int ngSpice_Decode_Evt(void* evt, int type,
+                        double *pplotval, const char **ppprintval)
+{
+    if (type >= g_evt_num_udn_types)
+        return 1;
+    if (!evt) {
+        if (!ppprintval)
+            return 2;
+        *ppprintval = g_evt_udn_info[type]->name;
+        return 0;
+    }
+    if (pplotval)
+        g_evt_udn_info[type]->plot_val(evt, "", pplotval);
+    if (ppprintval)
+        g_evt_udn_info[type]->print_val(evt, "", (char **)ppprintval);
+    return 0;
+}
+
 /* Get info about the event node vector.
 If node_name is NULL, just delete previous data */
 IMPEXP
@@ -1451,7 +1501,7 @@ sh_vfprintf(FILE *f, const char *fmt, va_list args)
 {
     char buf[1024];
     char *p/*, *s*/;
-    int nchars, /*escapes,*/ result;
+    int nchars;
     size_t size;
 
 
@@ -1531,7 +1581,7 @@ sh_vfprintf(FILE *f, const char *fmt, va_list args)
        Spice_Init() from caller of ngspice.dll */
 
 
-    result = sh_fputs(p, f);
+    sh_fputs(p, f);
 
     if (p != buf)
         tfree(p);
@@ -1913,7 +1963,6 @@ void SetAnalyse(
 || defined (HAVE_FTIME)
     PerfTime timenow;               /* actual time stamp */
     int diffsec, diffmillisec;      /* differences actual minus prev. time stamp */
-    int result;                     /* return value from callback function */
     char* s;                        /* outputs to callback function */
     int OldPercent;                 /* Previous progress value */
     char OldAn[128];                /* Previous analysis type */
@@ -1978,7 +2027,7 @@ void SetAnalyse(
     if (!strcmp(Analyse, "tran")) {
         if (ckt && (ckt->CKTtime > ckt->CKTfinalTime - ckt->CKTmaxStep)) {
            sprintf(s, "--ready--");
-           result = statfcn(s, ng_ident, userptr);
+           statfcn(s, ng_ident, userptr);
            tfree(s);
            return;
         }
@@ -1991,7 +2040,7 @@ void SetAnalyse(
             return;
         }
         sprintf( s, "--ready--");
-        result = statfcn(s, ng_ident, userptr);
+        statfcn(s, ng_ident, userptr);
         tfree(s);
         return;
     }
@@ -2040,7 +2089,7 @@ void SetAnalyse(
         }
         /* ouput only after a change */
         if (strcmp(olds, s))
-            result = statfcn(s, ng_ident, userptr);
+            statfcn(s, ng_ident, userptr);
         if(thread1)
             strcpy(olds1, s);
         else
@@ -2049,11 +2098,10 @@ void SetAnalyse(
     tfree(s);
 #else
     char* s;
-    int result;
     static bool havesent = FALSE;
     if (!havesent) {
         s = copy("No usage info available");
-        result = statfcn(s, ng_ident, userptr);
+        statfcn(s, ng_ident, userptr);
         tfree(s);
         havesent = TRUE;
     }
@@ -2417,8 +2465,14 @@ sharedsync(double *pckttime, double *pcktdelta, double olddelta, double finalt,
                step if return value from getsync is 1. */
             int retval = getsync(*pckttime, pcktdelta, olddelta, redostep, ng_ident, loc, userptr);
             /* never move beyond final time */
-            if (*pckttime + *pcktdelta > finalt)
-                *pcktdelta = finalt - *pckttime - 1.1 * delmin;
+            if (*pckttime + *pcktdelta > finalt) {
+                double newdelta;
+
+                newdelta = finalt - *pckttime - 1.1 * delmin;
+                if (newdelta <= 0.0)
+                    newdelta = finalt - *pckttime;
+                *pcktdelta = newdelta;
+            }
 
             /* user has decided to redo the step, ignoring redostep being set to 0
             by ngspice. */
@@ -2443,6 +2497,13 @@ void shared_send_dict(int index, int no_of_nodes, char* name, char*type)
 {
     if (sendinitevt)
         sendinitevt(index, no_of_nodes, name, type, ng_ident, euserptr);
+}
+
+static int evt_shim(double time, Mif_Value_t *vp, void *ctx, int last)
+{
+    if (sendrawevt)
+        return sendrawevt(time, vp->pvalue, ctx, last);  // Strip Mif_value.
+    return 1;
 }
 #endif
 
