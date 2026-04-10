@@ -244,13 +244,6 @@ inp_list(FILE *file, struct card *deck, struct card *extras, int type)
     bool useout = (file == cp_out);
     int i = 1;
 
-    /* gtri - wbk - 03/07/91 - Don't use 'more' type output if ipc enabled */
-#ifdef XSPICE
-    if (g_ipc.enabled)
-        useout = FALSE;
-#endif
-    /* gtri - end - 03/07/91 */
-
     if (useout) {
         out_init();
         file = cp_more;
@@ -530,7 +523,9 @@ inp_spsource(FILE *fp, bool comfile, char *filename, bool intfile)
     char *dir_name = ngdirname(filename ? filename : ".");
 
     startTime = seconds();
-    /* inp_source() called with fp: load from file, */
+    /* Parsing the circuit 2.
+       This is the next major step:
+       inp_source() called with fp: load circuit netlist from file, */
     /* called with *fp == NULL and intfile: we want to load circuit from circarray */
     if (fp || intfile) {
         deck = inp_readall(fp, dir_name, filename, comfile, intfile, &expr_w_temper);
@@ -738,7 +733,11 @@ inp_spsource(FILE *fp, bool comfile, char *filename, bool intfile)
     } /* end if (comfile) */
 
     else {  /* must be regular deck . . . . */
-        /* loop through deck and handle control cards */
+        /* Loop through deck and handle control cards.
+         * Pointer ld refers to the last card processed that has not
+         * been deleted.
+         */
+
         for (dd = deck->nextcard; dd; dd = ld->nextcard) {
             /* Ignore comment lines, but not lines begining with '*#',
                but remove them, if they are in a .control ... .endc section */
@@ -781,19 +780,17 @@ inp_spsource(FILE *fp, bool comfile, char *filename, bool intfile)
 
                 /* Special control lines outside of .control section? */
 
-                if (prefix("*#", s)) {
+                if (prefix("*#", s))
                     s = skip_ws(s + 2);
-                    if (!*s)
-                        continue;
-                }
-
-                /* assemble all commands starting with pre_ after stripping
-                 * pre_, to be executed before circuit parsing */
 
                 if (ciprefix("pre_", s)) {
+                    /* Assemble all commands starting with pre_ after stripping
+                     * pre_, to be executed before circuit parsing.
+                     */
+
                     s = s + 4;
                     pre_controls = wl_cons(copy(s), pre_controls);
-                } else {
+                } else if (*s) {
                     /* Assemble all other commands to be executed
                      * after circuit parsing */
 
@@ -832,10 +829,10 @@ inp_spsource(FILE *fp, bool comfile, char *filename, bool intfile)
                         ld->nextcard = dd->nextcard;
                         line_free(dd, FALSE);
                     } else {
-                        ld = dd;
+                        ld = dd; // Keep this card
                     }
                 } else {
-                    ld = dd;
+                    ld = dd;     // ... and this.
                 }
             }
         }  /* end for (dd = deck->nextcard . . . .  */
@@ -848,6 +845,7 @@ inp_spsource(FILE *fp, bool comfile, char *filename, bool intfile)
 #ifdef OSDI
                 inputdir = dir_name;
 #endif
+                /* process each pre_xxx command */
                 cp_evloop(wl->wl_word);
             }
 
@@ -929,7 +927,9 @@ inp_spsource(FILE *fp, bool comfile, char *filename, bool intfile)
                 }
             }
 
-            /* Now expand subcircuit macros and substitute numparams.*/
+            /* Parsing the circuit 4.
+               This is the next major step:
+               Expand subcircuit macros and substitute numparams.*/
             if (!cp_getvar("nosubckt", CP_BOOL, NULL, 0))
                 if ((deck->nextcard = inp_subcktexpand(deck->nextcard)) == NULL) {
                     line_free(realdeck, TRUE);
@@ -971,19 +971,44 @@ inp_spsource(FILE *fp, bool comfile, char *filename, bool intfile)
                 FILE *fdo = fopen("debug-out2.txt", "w");
                 if (fdo) {
                     struct card *tc = NULL;
-                    fprintf(fdo, "**************** uncommented deck **************\n\n");
+                    fprintf(fdo,
+                        "\n\n**************** uncommented deck without source file info "
+                        "**************\n\n");
                     /* always print first line */
-                    fprintf(fdo, "%6s  %6d  %6d  %s\n", deck->linesource, deck->linenum_orig, deck->linenum, deck->line);
+                    fprintf(fdo, "%6d  %s\n", deck->linenum,
+                        deck->line);
                     /* here without out-commented lines */
                     for (tc = deck->nextcard; tc; tc = tc->nextcard) {
                         if (*(tc->line) == '*')
                             continue;
-                        fprintf(fdo, "%6s  %6d  %6d  %s\n", tc->linesource, tc->linenum_orig, tc->linenum, tc->line);
+                        /* Only truncated .model lines */
+                        if (ciprefix(".model", tc->line)) {
+                            fprintf(fdo, "%6d  %.100s ",
+                                tc->linenum, tc->line);
+                            if (strlen(tc->line) > 100)
+                                fprintf(fdo, " ... (truncated)");
+                            fprintf(fdo, "\n");
+                        }
+                        else {
+                            fprintf(fdo, "%6d  %s\n",
+                                tc->linenum, tc->line);
+                        }
                     }
-                    fprintf(fdo, "\n****************** complete deck ***************\n\n");
-                    /* now completely */
-                    for (tc = deck; tc; tc = tc->nextcard)
-                        fprintf(fdo, "%6s  %6d  %6d  %s\n", tc->linesource, tc->linenum_orig, tc->linenum, tc->line);
+                    if (!cp_getvar("debug-out-short", CP_BOOL, NULL, 0)) {
+                        fprintf(fdo, "**************** uncommented deck **************\n\n");
+                        /* always print first line */
+                        fprintf(fdo, "%6s  %6d  %6d  %s\n", deck->linesource, deck->linenum_orig, deck->linenum, deck->line);
+                        /* here without out-commented lines */
+                        for (tc = deck->nextcard; tc; tc = tc->nextcard) {
+                            if (*(tc->line) == '*')
+                                continue;
+                            fprintf(fdo, "%6s  %6d  %6d  %s\n", tc->linesource, tc->linenum_orig, tc->linenum, tc->line);
+                        }
+                        fprintf(fdo, "\n****************** complete deck ***************\n\n");
+                        /* now completely */
+                        for (tc = deck; tc; tc = tc->nextcard)
+                            fprintf(fdo, "%6s  %6d  %6d  %s\n", tc->linesource, tc->linenum_orig, tc->linenum, tc->line);
+                    }
                     fclose(fdo);
                 }
                 else
@@ -1062,7 +1087,9 @@ inp_spsource(FILE *fp, bool comfile, char *filename, bool intfile)
            if (newcompat.hs || newcompat.spe)
               rem_unused_mos_models(deck->nextcard);
 #endif
-            /* now load deck into ft_curckt -- the current circuit. */
+            /* Parsing the circuit 5.
+               This is the next major step:
+               load deck into ft_curckt -- the current circuit. */
             if(inp_dodeck(deck, tt, wl_first, FALSE, options, filename) != 0)
                 return 1;
 
@@ -1185,10 +1212,12 @@ inp_spsource(FILE *fp, bool comfile, char *filename, bool intfile)
                         continue;
                     fprintf(fdo, "%6d  %6d  %s\n", tc->linenum_orig, tc->linenum, tc->line);
                 }
-                fprintf(fdo, "\n****************** complete deck ***************\n\n");
-                /* now completely */
-                for (tc = deck; tc; tc = tc->nextcard)
-                    fprintf(fdo, "%6d  %6d  %s\n", tc->linenum_orig, tc->linenum, tc->line);
+                if (!cp_getvar("debug-out-short", CP_BOOL, NULL, 0)) {
+                    fprintf(fdo, "\n****************** complete deck ***************\n\n");
+                    /* now completely */
+                    for (tc = deck; tc; tc = tc->nextcard)
+                        fprintf(fdo, "%6d  %6d  %s\n", tc->linenum_orig, tc->linenum, tc->line);
+                }
                 fclose(fdo);
             }
             else
@@ -1389,6 +1418,10 @@ inp_dodeck(
      *---------------------------------------------------*/
     if (!noparse) {
         startTime = seconds();
+        /* Parsing the circuit 6.
+           This is the next major step:
+           Input a single deck, and return a pointer to the circuit.
+           Parse all models and instances */
         ckt = if_inpdeck(deck, &tab);
         ft_curckt->FTEstats->FTESTATnetParseTime = seconds() - startTime;
         /* if .probe, rename the current measurement node vcurr_ */
@@ -1439,10 +1472,6 @@ inp_dodeck(
 
         if (dd->error) {
             char *p, *q;
-#ifdef XSPICE
-            /* add setting of ipc syntax error flag */
-            g_ipc.syntax_error = IPC_TRUE;
-#endif
             p = dd->error;
             fflush(stdout);
             do {
@@ -1757,7 +1786,7 @@ com_alterparam(wordlist *wl)
         /* alterparam subcktname pname=vpval
            Parameters from within subcircuit are no longer .param lines, but have been added to
            the .subckt line as pname=paval and to the x line as pval. pval in the x line takes
-           precedence when subciruit is called, so has to be replaced here.
+           precedence when subcircuit is called, so has to be replaced here.
            Find subcircuit with subcktname.
            After params: Count the number of parameters (notok) until parameter pname is found.
            When found, search for x-line with subcktname.

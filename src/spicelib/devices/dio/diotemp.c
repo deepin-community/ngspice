@@ -29,6 +29,7 @@ void DIOtempUpdate(DIOmodel *inModel, DIOinstance *here, double Temp, CKTcircuit
     double dt;
     double factor;
     double tBreakdownVoltage;
+    double totalSatCur;
 
     double egfet1,arg1,fact1,pbfact1,pbo,gmaold,pboSW,gmaSWold;
     double fact2,pbfact,arg,egfet,gmanew,gmaSWnew;
@@ -196,8 +197,14 @@ void DIOtempUpdate(DIOmodel *inModel, DIOinstance *here, double Temp, CKTcircuit
     here->DIOtDepSWCap=model->DIOdepletionSWcapCoeff*
             here->DIOtJctSWPot;
     /* and Vcrit */
-    here->DIOtVcrit = vte * log(vte/(CONSTroot2*here->DIOtSatCur));
-
+    totalSatCur = here->DIOtSatCur + here->DIOtSatSWCur;
+    if(model->DIOresistSWGiven) {
+        here->DIOtVcrit = vte * log(vte/(CONSTroot2*here->DIOtSatCur));
+        here->DIOtVcritSW = vts * log(vts/(CONSTroot2*here->DIOtSatSWCur));
+    } else {
+        here->DIOtVcrit = vte * log(vte/(CONSTroot2*totalSatCur));
+        here->DIOtVcritSW = vts * log(vts/(CONSTroot2*here->DIOtSatSWCur)); 
+    }
     /* and now to compute the breakdown voltage, again, using
      * temperature adjusted basic parameters */
     if (model->DIObreakdownVoltageGiven){
@@ -211,9 +218,9 @@ void DIOtempUpdate(DIOmodel *inModel, DIOinstance *here, double Temp, CKTcircuit
         } else { /* level=3 */
             cbv = model->DIObreakdownCurrent * here->DIOarea * here->DIOm;
         }
-        if (cbv < here->DIOtSatCur * tBreakdownVoltage/vt) {
+        if (cbv < totalSatCur * tBreakdownVoltage/vt) {
 #ifdef TRACE
-            cbv=here->DIOtSatCur * tBreakdownVoltage/vt;
+            cbv=totalSatCur * tBreakdownVoltage/vt;
             SPfrontEnd->IFerrorf (ERR_WARNING, "%s: breakdown current increased to %g to resolve", here->DIOname, cbv);
             SPfrontEnd->IFerrorf (ERR_WARNING,
             "incompatibility with specified saturation current");
@@ -222,11 +229,11 @@ void DIOtempUpdate(DIOmodel *inModel, DIOinstance *here, double Temp, CKTcircuit
         } else {
             tol=ckt->CKTreltol*cbv;
             xbv=tBreakdownVoltage-model->DIObrkdEmissionCoeff*vt*log(1+cbv/
-                    (here->DIOtSatCur));
+                    totalSatCur);
             for(iter=0 ; iter < 25 ; iter++) {
                 xbv=tBreakdownVoltage-model->DIObrkdEmissionCoeff*vt*log(cbv/
-                        (here->DIOtSatCur)+1-xbv/vt);
-                xcbv=here->DIOtSatCur *
+                        totalSatCur+1-xbv/vt);
+                xcbv=totalSatCur *
                      (exp((tBreakdownVoltage-xbv)/(model->DIObrkdEmissionCoeff*vt))-1+xbv/vt);
                 if (fabs(xcbv-cbv) <= tol) goto matched;
             }
@@ -250,6 +257,14 @@ void DIOtempUpdate(DIOmodel *inModel, DIOinstance *here, double Temp, CKTcircuit
                  + (model->DIOresistTemp2 * dt * dt);
         here->DIOtConductance = model->DIOconductance * here->DIOarea * here->DIOm / factor;
         here->DIOtConductance_dT = -model->DIOconductance * here->DIOarea * here->DIOm *
+            (model->DIOresistTemp1 + model->DIOresistTemp2 * dt) / (factor*factor);
+    }
+    here->DIOtConductanceSW = model->DIOconductanceSW * here->DIOpj * here->DIOm;
+    if(model->DIOresistSWGiven && model->DIOresistSW!=0.0) {
+        factor = 1.0 + (model->DIOresistTemp1) * dt
+                 + (model->DIOresistTemp2 * dt * dt);
+        here->DIOtConductanceSW = model->DIOconductanceSW * here->DIOpj * here->DIOm / factor;
+        here->DIOtConductanceSW_dT = -model->DIOconductanceSW * here->DIOpj * here->DIOm *
             (model->DIOresistTemp1 + model->DIOresistTemp2 * dt) / (factor*factor);
     }
 

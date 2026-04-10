@@ -2,3 +2,6 @@
 # is not a 'full classic featured' shared library, it's onlz useful for TclTk
 # combined usage.
 tclspice: package-name-doesnt-match-sonames libspice0
+
+# That's intended.
+tclspice: spelling-error-in-binary wTH with [usr/lib/*/libspice.so.*]

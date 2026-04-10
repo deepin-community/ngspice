@@ -23,7 +23,7 @@ Author: 1985 Wayne A. Christopher, U. C. Berkeley CAD Group
 
 
 static char *pnum(double num);
-static int CKTfour(int ndata, int numFreq, double *thd, double *Time, double *Value,
+static int CKTfour(int ndata, int numFreq, int numPeriod, double *thd, double *Time, double *Value,
                    double FundFreq, double *Freq, double *Mag, double *Phase, double *nMag,
                    double *nPhase);
 
@@ -32,8 +32,8 @@ static int CKTfour(int ndata, int numFreq, double *thd, double *Time, double *Va
 #define DEF_FOURGRIDSIZE 200
 
 
-/* CKTfour(ndata, numFreq, thd, Time, Value, FundFreq, Freq, Mag, Phase, nMag, nPhase)
- *         len    10       ?    inp   inp    inp       out   out  out    out   out
+/* CKTfour(ndata, numFreq, numPeriod, thd, Time, Value, FundFreq, Freq, Mag, Phase, nMag, nPhase)
+ *         len    10       1          ?    inp   inp    inp       out   out  out    out   out
  */
 
 int
@@ -42,7 +42,7 @@ fourier(wordlist *wl, struct plot *current_plot)
     struct dvec *time, *vec;
     struct pnode *pn, *names;
     double fundfreq, *data = NULL;
-    int nfreqs, fourgridsize, polydegree;
+    int nfreqs, nperiods, fourgridsize, polydegree;
     double *freq, *mag, *phase, *nmag, *nphase;  /* Outputs from CKTfour */
     double thd, *timescale = NULL;
     char *s;
@@ -50,6 +50,7 @@ fourier(wordlist *wl, struct plot *current_plot)
     char xbuf[20];
     int shift;
     int rv = 1;
+    bool foursave = TRUE;
 
     struct dvec *n;
     int newveccount = 1;
@@ -67,10 +68,14 @@ fourier(wordlist *wl, struct plot *current_plot)
 
     if (!cp_getvar("nfreqs", CP_NUM, &nfreqs, 0) || nfreqs < 1)
         nfreqs = 10;
+    if (!cp_getvar("nperiods", CP_NUM, &nperiods, 0) || nperiods < 1)
+        nperiods = 1;
     if (!cp_getvar("polydegree", CP_NUM, &polydegree, 0) || polydegree < 0)
         polydegree = 1;
     if (!cp_getvar("fourgridsize", CP_NUM, &fourgridsize, 0) || fourgridsize < 1)
         fourgridsize = DEF_FOURGRIDSIZE;
+    if (cp_getvar("fournosave", CP_BOOL, NULL, 0))
+        foursave = FALSE;
 
     time = current_plot->pl_scale;
     if (!isreal(time)) {
@@ -109,14 +114,16 @@ fourier(wordlist *wl, struct plot *current_plot)
 
             if (polydegree) {
                 double *dp, d;
+                /* Get fourgridsize points per period */
+                fourgridsize = fourgridsize * nperiods;
                 /* Build the grid... */
                 timescale = TMALLOC(double, fourgridsize);
                 data = TMALLOC(double, fourgridsize);
                 dp = ft_minmax(time, TRUE);
                 /* Now get the last fund freq... */
-                d = 1 / fundfreq;   /* The wavelength... */
+                d = nperiods / fundfreq;   /* The wavelength... */
                 if (dp[1] - dp[0] < d) {
-                    fprintf(cp_err, "Error: wavelength longer than time span\n");
+                    fprintf(cp_err, "Error: (%d * wavelength) longer than time span\n", nperiods);
                     goto done;
                 } else if (dp[1] - dp[0] > d) {
                     dp[0] = dp[1] - d;
@@ -140,7 +147,7 @@ fourier(wordlist *wl, struct plot *current_plot)
                 timescale = time->v_realdata;
             }
 
-            err = CKTfour(fourgridsize, nfreqs, &thd, timescale,
+            err = CKTfour(fourgridsize, nfreqs, nperiods, &thd, timescale,
                           data, fundfreq, freq, mag, phase, nmag,
                           nphase);
             if (err != OK) {
@@ -150,9 +157,10 @@ fourier(wordlist *wl, struct plot *current_plot)
 
             fprintf(cp_out, "Fourier analysis for %s:\n", vec->v_name);
             fprintf(cp_out,
-                    "  No. Harmonics: %d, THD: %g %%, Gridsize: %d, Interpolation Degree: %d\n\n",
+                    "  No. Harmonics: %d, THD: %g %%, Gridsize: %d, Interpolation Degree: %d,"
+                    " No. Periods: %d\n\n",
                     nfreqs, thd, fourgridsize,
-                    polydegree);
+                    polydegree, nperiods);
             /* Each field will have width cp_numdgt + 6 (or 7
              * with HP-UX) + 1 if there is a - sign.
              */
@@ -188,34 +196,48 @@ fourier(wordlist *wl, struct plot *current_plot)
             }
             fputs("\n", cp_out);
 
-            /* create and assign a new vector n */
-            /* with size 3 * nfreqs in current plot */
-            /* generate name for new vector, using vec->name */
-            n = dvec_alloc(tprintf("fourier%d%d", callstof, newveccount),
-                           SV_NOTYPE,
-                           VF_REAL | VF_PERMANENT,
-                           3 * nfreqs, NULL);
+            if (foursave) {
+                /* create a vector for THD */
+                n = dvec_alloc(tprintf("thd%d%d", callstof, newveccount),
+                    SV_NOTYPE,
+                    VF_REAL | VF_PERMANENT,
+                    1, NULL);
 
-            n->v_numdims = 2;
-            n->v_dims[0] = 3;
-            n->v_dims[1] = nfreqs;
+                n->v_numdims = 1;
 
-            vec_new(n);
+                vec_new(n);
 
-            /* store data in vector: freq, mag, phase */
-            for (i = 0; i < nfreqs; i++) {
-                n->v_realdata[i] = freq[i];
-                n->v_realdata[i + nfreqs] = mag[i];
-                n->v_realdata[i + 2 * nfreqs] = phase[i];
+                n->v_realdata[0] = thd;
+
+                /* create and assign a new vector n */
+                /* with size 3 * nfreqs in current plot */
+                /* generate name for new vector, using vec->name */
+                n = dvec_alloc(tprintf("fourier%d%d", callstof, newveccount),
+                    SV_NOTYPE,
+                    VF_REAL | VF_PERMANENT,
+                    3 * nfreqs, NULL);
+
+                n->v_numdims = 2;
+                n->v_dims[0] = 3;
+                n->v_dims[1] = nfreqs;
+
+                vec_new(n);
+
+                /* store data in vector: freq, mag, phase */
+                for (i = 0; i < nfreqs; i++) {
+                    n->v_realdata[i] = freq[i];
+                    n->v_realdata[i + nfreqs] = mag[i];
+                    n->v_realdata[i + 2 * nfreqs] = phase[i];
+                }
+                newveccount++;
+
+                if (polydegree) {
+                    tfree(timescale);
+                    tfree(data);
+                }
+                timescale = NULL;
+                data = NULL;
             }
-            newveccount++;
-
-            if (polydegree) {
-                tfree(timescale);
-                tfree(data);
-            }
-            timescale = NULL;
-            data = NULL;
         }
     }
 
@@ -271,6 +293,7 @@ static int
 CKTfour(int ndata,              /* number of entries in the Time and
                                    Value arrays */
         int numFreq,            /* number of harmonics to calculate */
+        int numPeriod,		      /* number of periods for detection */
         double *thd,            /* total harmonic distortion (percent)
                                    to be returned */
         double *Time,           /* times at which the voltage/current
@@ -296,10 +319,10 @@ CKTfour(int ndata,              /* number of entries in the Time and
      * The arrays must all be allocated by the caller.
      * The Time and Value array must be reasonably distributed over at
      * least one full period of the fundamental Frequency for the
-     * fourier transform to be useful.  The function will take the
-     * last period of the frequency as data for the transform.
+     * fourier transform to be useful.  The function will take
+     * numPeriod periods of the frequency as data for the transform.
      *
-     * We are assuming that the caller has provided exactly one period
+     * We are assuming that the caller has provided exactly numPeriod periods
      * of the fundamental frequency.  */
     int i;
     int j;
@@ -314,10 +337,10 @@ CKTfour(int ndata,              /* number of entries in the Time and
         Phase[i] = 0;
     }
 
-    for (i = 0; i < ndata; i++)
+    for (i = 0; i < ndata ; i++)
         for (j = 0; j < numFreq; j++) {
-            Mag[j]   += Value[i] * sin(j*2.0*M_PI*i/((double)ndata));
-            Phase[j] += Value[i] * cos(j*2.0*M_PI*i/((double)ndata));
+            Mag[j]   += Value[i] * sin(j*2.0*M_PI*numPeriod*i/((double)ndata));
+            Phase[j] += Value[i] * cos(j*2.0*M_PI*numPeriod*i/((double)ndata));
         }
 
     Mag[0] = Phase[0]/ndata;

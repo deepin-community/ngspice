@@ -114,13 +114,16 @@ CKTdoJob(CKTcircuit* ckt, int reset, TSKtask* task)
     ckt->CKTkluMemGrowFactor = task->TSKkluMemGrowFactor ;
 #endif
 
-#ifdef NEWTRUNC
     ckt->CKTlteReltol = task->TSKlteReltol;
     ckt->CKTlteAbstol = task->TSKlteAbstol;
-#endif /* NEWTRUNC */
+    ckt->CKTlteTrtol = task->TSKlteTrtol;
+    ckt->CKTnewtrunc = task->TSKnewtrunc;
 
     fprintf(stdout, "Doing analysis at TEMP = %f and TNOM = %f\n\n",
         ckt->CKTtemp - CONSTCtoK, ckt->CKTnomTemp - CONSTCtoK);
+
+    if (ckt->CKTnewtrunc)
+        fprintf(stdout, "Note: Voltage based truncation error correction selected\n");
 
     /* call altermod and alter on device and model parameters assembled in
        devtlist and modtlist (if using temper) because we have a new temperature */
@@ -157,51 +160,15 @@ CKTdoJob(CKTcircuit* ckt, int reset, TSKtask* task)
         if (!error)
             error = CKTunsetup(ckt);
 
-#ifdef XSPICE
-        /* gtri - add - 12/12/90 - wbk - set ipc syntax error flag */
-        if (error)   g_ipc.syntax_error = IPC_TRUE;
-        /* gtri - end - 12/12/90 */
-#endif
-
         if (!error)
             error = CKTsetup(ckt);
-
-#ifdef XSPICE
-        /* gtri - add - 12/12/90 - wbk - set ipc syntax error flag */
-        if (error)   g_ipc.syntax_error = IPC_TRUE;
-        /* gtri - end - 12/12/90 */
-#endif
 
         if (!error)
             error = CKTtemp(ckt);
 
-#ifdef XSPICE
-        /* gtri - add - 12/12/90 - wbk - set ipc syntax error flag */
-        if (error)   g_ipc.syntax_error = IPC_TRUE;
-        /* gtri - end - 12/12/90 */
-#endif
-
         if (error) {
-
-#ifdef XSPICE
-            /* gtri - add - 12/12/90 - wbk - return if syntax errors from parsing */
-            if (g_ipc.enabled) {
-                if (g_ipc.syntax_error)
-                    ;
-                else {
-                    /* else, send (GO) errchk status if we got this far */
-                    /* Caller is responsible for sending NOGO status if we returned earlier */
-                    ipc_send_errchk();
-                }
-            }
-            /* gtri - end - 12/12/90 */
-#endif
-
-
             return error;
-
-
-        }/* if error  */
+        }
     }
 
     error2 = OK;

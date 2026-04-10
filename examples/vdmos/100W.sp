@@ -63,6 +63,7 @@ plot db(V(out)/V(out1))
 set units=degrees
 plot unwrap(ph(V(out)/V(out1)))
 tran 1u 1000m
+rusage time
 fourier 1K V(out)
 plot v(out)*@rload[i]
 settype temperature v(tn) v(tp) v(tcn) v(tcp)
@@ -83,7 +84,7 @@ plot inoise_spectrum
 + Cgdmax=2.45n Cgdmin=10p a=0.3 Cgs=1.2n
 + Is=60p N=1.1 Rb=14m XTI=3
 + Cjo=1.5n Vj=0.8 m=0.5
-+ tcvth=0.0065 MU=-1.27 texp0=1.5
++ tcvth=-0.0065 MU=-1.27 texp0=1.5
 + Rthjc=0.4 Cthj=5e-3
 + mtriode=0.8
 .model IRFP9240 VDMOS pchan

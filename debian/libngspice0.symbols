@@ -1,5 +1,8 @@
 libngspice.so.0 libngspice0 #MINVER#
 * Build-Depends-Package: libngspice0-dev
+# Added in 45.2+ds
+ ngSpice_Decode_Evt@Base 45.2+ds
+ ngSpice_Raw_Evt@Base 45.2+ds
 # Added on 44+ds
  ngSpice_Reset@Base 44+ds
  ngSpice_nospiceinit@Base 44+ds

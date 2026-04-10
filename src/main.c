@@ -200,11 +200,8 @@ struct comm *cp_coms = spcp_coms;
 
 extern int OUTpBeginPlot(CKTcircuit *, JOB *, IFuid, IFuid, int, int, IFuid *, int, runDesc **);
 extern int OUTpData(runDesc *, IFvalue *, IFvalue *);
-extern int OUTwBeginPlot(CKTcircuit *, JOB *, IFuid, IFuid, int, int, IFuid *, int, runDesc **);
-extern int OUTwReference(runDesc *, IFvalue *, void **);
-extern int OUTwData(runDesc *, int, IFvalue *, void *), OUTwEnd(runDesc *), OUTendPlot(runDesc *);
-extern int OUTbeginDomain(runDesc *, IFuid, int, IFvalue *);
-extern int OUTendDomain(runDesc *), OUTstopnow(void);
+extern int OUTendPlot(runDesc *);
+extern int OUTstopnow(void);
 extern void OUTerror(int, char *, IFuid *);
 
 #ifdef __GNUC__
@@ -224,13 +221,7 @@ IFfrontEnd nutmeginfo = {
     OUTerrorf,
     OUTpBeginPlot,
     OUTpData,
-    OUTwBeginPlot,
-    OUTwReference,
-    OUTwData,
-    OUTwEnd,
     OUTendPlot,
-    OUTbeginDomain,
-    OUTendDomain,
     OUTattributes
 };
 
@@ -758,13 +749,14 @@ show_help(void)
            "  -n, --no-spiceinit        don't load the local or user's config file\n"
            "  -o, --output=FILE         set the outputfile\n"
            "  -p, --pipe                run in I/O pipe mode\n"
-           "  -q, --completion          activate command completion\n"
            "  -r, --rawfile=FILE        set the rawfile output\n"
            "      --soa-log=FILE        set the outputfile for SOA warnings\n"
            "  -s, --server              run spice as a server process\n"
            "  -t, --term=TERM           set the terminal type\n"
            "  -h, --help                display this help and exit\n"
            "  -v, --version             output version information and exit\n"
+           "  -f, --version-full        output full version information\n"
+           "      --version-small       output small version information\n"
            "\n"
            "Report bugs to %s.\n", cp_program, Bug_Addr);
 }
@@ -962,6 +954,8 @@ int main(int argc, char **argv)
             {"define",       required_argument, NULL, 'D'},
             {"help",         no_argument,       NULL, 'h'},
             {"version",      no_argument,       NULL, 'v'},
+            {"version-full", no_argument,       NULL, 'f'},
+            {"version-small", no_argument,      NULL, 256},
             {"batch",        no_argument,       NULL, 'b'},
             {"autorun",      no_argument,       NULL, 'a'},
             {"circuitfile",  required_argument, NULL, 'c'},
@@ -979,7 +973,7 @@ int main(int argc, char **argv)
 
         int option_index = 0;
 
-        int c = getopt_long(argc, argv, "D:hvbac:ino:pqr:st:",
+        int c = getopt_long(argc, argv, "D:hvfbac:ino:pqr:st:",
                             long_options, &option_index);
 
         if (c == -1) {
@@ -1013,6 +1007,22 @@ int main(int argc, char **argv)
             com_version(NULL);
             sp_shutdown(EXIT_INFO);
             break;
+
+        case 'f':       /* Full version info */
+        {
+            wordlist wl = { "-f", NULL, NULL };
+            com_version(&wl);
+            sp_shutdown(EXIT_INFO);
+        }
+        break;
+
+        case 256:       /* --version-small */
+        {
+            wordlist wl = { "-s", NULL, NULL };
+            com_version(&wl);
+            sp_shutdown(EXIT_INFO);
+        }
+        break;
 
         case 'b':       /* Batch mode */
         {
@@ -1067,7 +1077,8 @@ int main(int argc, char **argv)
             break;
 
         case 'q':       /* Command completion */
-            qflag = TRUE;
+            qflag = FALSE;
+            fprintf(stderr, "Warning: Command completion is not supported, 'q' is ignored\n");
             break;
 
         case 'r':       /* The raw file */
@@ -1252,11 +1263,30 @@ int main(int argc, char **argv)
     else {
         if (readinit) {
             /* load user's initialisation file
-              try accessing the initialisation file .spiceinit in a user provided
-              path read from environmental variable SPICE_USERINIT_DIR,
-              if that fails try the alternate name spice.rc, then look into
-              the current directory, then the HOME directory, then into USERPROFILE */
+              try accessing the initialisation file .spiceinit
+              (If it fails, try the alternate name spice.rc):
+              - in the directory from where the netlist has been loaded
+              - in a user provided path read from environmental variable SPICE_USERINIT_DIR,
+              - in the current directory,
+              - in the the HOME directory,
+              - in the USERPROFILE directory. */
             do {
+                {
+                    if (optind <= argc) {
+                        char* inpath = ngdirname(argv[optind]);
+                        if (inpath) {
+                            if (read_initialisation_file(inpath, INITSTR) != FALSE) {
+                                FREE(inpath);
+                                break;
+                            }
+                            if (read_initialisation_file(inpath, ALT_INITSTR) != FALSE) {
+                                FREE(inpath);
+                                break;
+                            }
+                            FREE(inpath);
+                        }
+                    }
+                }
                 {
                     const char* const userinit = getenv("SPICE_USERINIT_DIR");
                     if (userinit) {
@@ -1340,6 +1370,16 @@ int main(int argc, char **argv)
 #elif defined(WaGauss)
         initw();
 #endif
+        /* write out the ngspice start command */
+        if (ft_ngdebug)
+        {
+            int ni;
+            fprintf(stdout, "\nNote: ngspice start command line:\n");
+            for (ni = 0; ni < argc; ni++) {
+                fprintf(stdout, " %s", argv[ni]);
+            }
+            fprintf(stdout, "\n\n");
+        }
 
         if (!ft_servermode) {
 
@@ -1368,7 +1408,7 @@ int main(int argc, char **argv)
                 tpf = smktemp("sp");
                 tempfile = fopen(tpf, "w+bTD");
                 if (tempfile == NULL) {
-                    fprintf(stderr, "Could not open a temporary file "
+                    fprintf(stderr, "Error: Could not open a temporary file "
                             "to save and use optional arguments.\n");
                     sp_shutdown(EXIT_BAD);
                 }
@@ -1461,7 +1501,10 @@ int main(int argc, char **argv)
             gotone = FALSE; // Re-use
 
             if (tempfile && (!err || !ft_batchmode)) {
-                /* Copy the input file name for becoming another file search path */
+                /* Parsing the circuit 1.
+                   This is the next major step:
+                   Source the input file, then parse the data and create the circuit.
+                   Copy the input file name for becoming another file search path */
                 if (inp_spsource(tempfile, FALSE, dname, FALSE) != 0) {
                     fprintf(stderr, "    Simulation interrupted due to error!\n\n");
                     if (ft_stricterror || (oflag && !cp_getvar("interactive", CP_BOOL, NULL, 0)))
@@ -1539,8 +1582,9 @@ int main(int argc, char **argv)
         }
         else {
             fprintf(stderr,
-                    "Note: No \".plot\", \".print\", or \".fourier\" lines; "
-                    "no simulations run\n");
+                    "Error: incomplete or empty netlist\n"
+                    "       or no \".plot\", \".print\", or \".fourier\" lines in batch mode;\n"
+                    "no simulations run!\n");
             sp_shutdown(EXIT_BAD);
         }
 

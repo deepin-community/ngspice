@@ -55,6 +55,7 @@ CDHW*/
 #include "ngspice/iferrmsg.h"
 #include "ngspice/ifsim.h"
 #include "ngspice/hash.h"
+#include "ngspice/devdefs.h"
 
 #include "circuits.h"
 #include "spiceif.h"
@@ -92,8 +93,9 @@ static int finddev(CKTcircuit *ckt, char *name, GENinstance **devptr, GENmodel *
 /* espice fix integration */
 static int finddev_special(CKTcircuit *ckt, char *name, GENinstance **devptr, GENmodel **modptr, int *device_or_model);
 
-/* Input a single deck, and return a pointer to the circuit. */
-
+/* Input a single deck, and return a pointer to the circuit. 
+   Parse all models in function INPpas1, instances (devices) in INPpas2,
+   consider initial conditions (INPpas3), and shunt capacitors (INPpas4). */
 CKTcircuit *
 if_inpdeck(struct card *deck, INPtables **tab)
 {
@@ -161,15 +163,23 @@ if_inpdeck(struct card *deck, INPtables **tab)
 
     ft_curckt->ci_curTask = ft_curckt->ci_defTask;
 
-    /* Parse the .model lines. Enter the model into the global model table modtab. */
     modtab = NULL;
     modtabhash = NULL;
+    /* Parsing the circuit 7.
+       This is the next major step:
+       Parse the .model lines.
+       Enter the model into the global model table modtab
+       and into the corresponding hash table modtabhash.
+       The role of 'tab' is unclear (not used any more?). */
     INPpas1(ckt, deck->nextcard, *tab);
-    /* store the new model table in the current circuit */
+    /* store the new model tables in the current circuit */
     ft_curckt->ci_modtab = modtab;
     ft_curckt->ci_modtabhash = modtabhash;
 
-    /* Scan through the instance lines and parse the circuit. */
+    /* Parsing the circuit 8.
+       This is the next major step:
+       Scan through the instance lines and parse the circuit.
+       Set up the circuit matrix. */
     INPpas2(ckt, deck->nextcard, *tab, ft_curckt->ci_defTask);
 #ifdef XSPICE
     if (!Evtcheck_nodes(ckt, *tab)) {
@@ -1620,6 +1630,10 @@ void com_snload(wordlist *wl)
     _foo(ckt->CKTstat, STATistics, 1);
     ckt->CKTstat->STATdevNum = NULL;
     _foo(ckt->CKTstat->STATdevNum, STATdevList, -1);
+    ckt->CKTstat->devCounts = NULL;
+    _foo(ckt->CKTstat->devCounts, size_t, DEVmaxnum + 1);
+    ckt->CKTstat->devTimes = NULL;
+    _foo(ckt->CKTstat->devTimes, double, DEVmaxnum + 1);
 
 #ifdef XSPICE
     _foo(ckt->evt, Evt_Ckt_Data_t, 1);
@@ -1775,6 +1789,8 @@ void com_snsave(wordlist *wl)
     /* Finally the stats */
     _foo(ckt->CKTstat, STATistics, 1);
     _foo(ckt->CKTstat->STATdevNum, STATdevList, 1);
+    _foo(ckt->CKTstat->devCounts, size_t, DEVmaxnum + 1);
+    _foo(ckt->CKTstat->devTimes, double, DEVmaxnum + 1);
 
 #ifdef XSPICE
     /* FIXME struct ckt->evt->data and others are not stored

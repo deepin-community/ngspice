@@ -142,8 +142,8 @@ override_dh_auto_install-arch: $(PREPROCESS_FILES:.in=)
 	dh_auto_install --destdir=$(INSTDIR) --sourcedirectory=$(CURDIR) --builddirectory=$(DEB_BUILD_DIR)/libngspice
 	# remove useless *.a and *.la files
 	find debian/tmp/ -type f \( -name "*.a" -o -name "*.la" \) -exec rm {} \;
-	# remove potential execution rights on *.so and *.vpi files
-	find debian/tmp/ -type f \( -name "*.so" -o -name "*.vpi" \) -exec chmod -x {} \;
+	# remove potential execution rights on *.cm, *.so and *.vpi files
+	find debian/tmp/ -type f \( -name "*.cm" -o -name "*.so" -o -name "*.vpi" \) -exec chmod -x {} \;
 
 override_dh_install-indep:
 	#

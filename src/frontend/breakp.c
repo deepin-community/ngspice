@@ -10,6 +10,7 @@ Author: 1985 Wayne A. Christopher, U. C. Berkeley CAD Group
 #include "ngspice/ngspice.h"
 #include "ngspice/cpdefs.h"
 #include "ngspice/ftedefs.h"
+#include "ngspice/cktdefs.h"
 #include "ngspice/dvec.h"
 #include "ngspice/ftedebug.h"
 #include "breakp.h"
@@ -186,6 +187,19 @@ com_stop(wordlist *wl)
         (void) sprintf(buf, "%d", debugnumber);
         cp_addkword(CT_DBNUMS, buf);
         debugnumber++;
+        /* If com_stop is called after tran simulation has already started, set a breakpoint
+           if not in the past */
+        if ((thisone->db_type == DB_STOPWHEN) && cieq(thisone->db_nodename1, "time")) {
+            if (thisone->db_value2 > ft_curckt->ci_ckt->CKTtime) {
+                CKTsetBreak(ft_curckt->ci_ckt, thisone->db_value2);
+                if (ft_ngdebug)
+                    printf("breakpoint set to time = %g\n", thisone->db_value2);
+            }
+            else {
+                fprintf(stderr, "\nWarning: command 'stop' would set breakpoint in the past, ignored!\n"
+                    "    time: %g, bkpt: %e\n\n", ft_curckt->ci_ckt->CKTtime, thisone->db_value2);
+            }
+        }
     }
 
     return;
@@ -209,7 +223,10 @@ com_trce(wordlist *wl)
 }
 
 
-/* Incrementally plot a value. This is just like trace. */
+/* Incrementally plot values. This is just like trace.
+ * Nodes may be specified with an offset, as name+number, as that is useful
+ * for separating the graphs of digital nodes. It will be ignored for analogue.
+ */
 
 void
 com_iplot(wordlist *wl)
@@ -224,12 +241,13 @@ com_iplot(wordlist *wl)
         return;
     }
 
-    /* settrace(wl, VF_PLOT); */
-
     struct dbcomm *d, *td, *currentdb = NULL;
     double         window = 0.0;
-    int            initial_steps = IPOINTMIN;
+#ifdef XSPICE
+    int            event_auto_incr = 0;
+#endif
     char          *s;
+    int            initial_steps = IPOINTMIN;
 
     /* Look for "-w window-size" at the front, indicating a windowed iplot
      * or "-d steps" to set the initial delay before the window appears.
@@ -254,6 +272,12 @@ com_iplot(wordlist *wl)
             wl = wl->wl_next;
             if (wl)
                 initial_steps = atoi(wl->wl_word);
+#ifdef XSPICE
+        } else if (wl->wl_word[1] == 'o' && !wl->wl_word[2]) {
+            /* Automatically offset traces for event nodes. */
+
+            event_auto_incr = 1;
+#endif
         } else {
             break;
         }
@@ -269,8 +293,14 @@ com_iplot(wordlist *wl)
         d = TMALLOC(struct dbcomm, 1);
         d->db_analysis = NULL;
         d->db_number = debugnumber++;
-        d->db_op = initial_steps; // Field re-use
-        d->db_value1 = window;    // Field re-use
+#ifdef XSPICE
+        d->db_iteration = event_auto_incr ? DB_AUTO_OFFSET : DB_NORMAL;
+#else
+        d->db_iteration = DB_NORMAL;
+#endif
+        d->db_op = initial_steps;       // Field re-use
+        d->db_value1 = window;          // Field re-use
+
         if (eq(s, "all")) {
             d->db_type = DB_IPLOTALL;
         } else {
@@ -278,8 +308,14 @@ com_iplot(wordlist *wl)
             d->db_nodename1 = copy(s);
         }
         tfree(s);/*DG: avoid memory leak */
-        d->db_also = currentdb;
-        currentdb = d;
+
+        /* Chain in expected order. */
+
+        if (currentdb)
+            td->db_also = d;
+        else
+            currentdb = d;
+        td = d;
         wl = wl->wl_next;
     }
 
@@ -388,7 +424,10 @@ void
 dbfree1(struct dbcomm *d)
 {
     tfree(d->db_nodename1);
-    tfree(d->db_nodename2);
+    if (d->db_type != DB_IPLOT && d->db_type != DB_IPLOTALL &&
+        d->db_type != DB_DEADIPLOT) {
+        tfree(d->db_nodename2);
+    }
     if (d->db_also)
         dbfree(d->db_also);
     tfree(d);
@@ -478,7 +517,7 @@ ft_bpcheck(struct plot *runplot, int iteration)
 
     if ((howmanysteps > 0) && (--howmanysteps == 0)) {
         if (steps > 1)
-            fprintf(cp_err, "Stopped after %d steps.\n", steps);
+            fprintf(cp_out, "Note: Stopped after %d steps.\n", steps);
         return (FALSE);
     }
 
@@ -654,4 +693,15 @@ printcond(struct dbcomm *d, FILE *fp)
                 fprintf(fp, " %g", dt->db_value2);
         }
     }
+}
+
+
+/* just check if we are in 'step' mode */
+bool
+ft_stepcheck(void)
+{
+    if ((steps > 0) && (howmanysteps == 0)) {
+        return (TRUE);
+    }
+    return (FALSE);
 }

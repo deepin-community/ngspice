@@ -50,7 +50,7 @@ typedef struct sVDMOSinstance {
     int VDMOStNodePrime; /* number of the internal temp node between voltage source and Rthca */
     int VDIOposPrimeNode; /* number of the internal node of the body diode */
 
-    int VDMOSvcktTbranch; /* equation number of branch equation added for cktTemp source */ 
+    int VDMOSvdevTbranch; /* equation number of branch equation added for cktTemp source */ 
 
     double VDMOSm;   /* parallel device multiplier */
 
@@ -171,10 +171,6 @@ typedef struct sVDMOSinstance {
                                        (source prime node,source prime node) */
     double *VDMOSDdpPtr;     /* pointer to sparse matrix element at
                                        (drain node,drain prime node) */
-    double *VDMOSGdpPtr;     /* pointer to sparse matrix element at
-                                       (gate node,drain prime node) */
-    double *VDMOSGspPtr;     /* pointer to sparse matrix element at
-                                       (gate node,source prime node) */
     double *VDMOSSspPtr;     /* pointer to sparse matrix element at
                                        (source node,source prime node) */
     double *VDMOSDPspPtr;    /* pointer to sparse matrix element at
@@ -233,8 +229,8 @@ typedef struct sVDMOSinstance {
     double *VDMOSTempdPtr;
     double *VDIOPosPrimetempPtr;
     double *VDMOSDtempPtr;
-    double *VDMOStempSPtr;
-    double *VDMOSSTempPtr;
+    double *VDMOSTempsPtr;
+    double *VDMOSStempPtr;
 
     double *VDMOSTcasetcasePtr; /* for Rthjc */
     double *VDMOSTcasetempPtr;
@@ -242,9 +238,9 @@ typedef struct sVDMOSinstance {
     double *VDMOSTptpPtr;       /* for Rthca */
     double *VDMOSTptcasePtr;
     double *VDMOSTcasetpPtr;
-    double *VDMOSCktTcktTPtr;   /* for VcktTemp */
-    double *VDMOSCktTtpPtr;
-    double *VDMOSTpcktTPtr;
+    double *VDMOSDevTdevTPtr;   /* for VdevTemp */
+    double *VDMOSDevTtpPtr;
+    double *VDMOSTpdevTPtr;
 
 #ifdef KLU
     BindElement *VDMOSDdBinding ;
@@ -291,9 +287,9 @@ typedef struct sVDMOSinstance {
     BindElement *VDMOSTptpBinding ;
     BindElement *VDMOSTptcaseBinding ;
     BindElement *VDMOSTcasetpBinding ;
-    BindElement *VDMOSCktTcktTBinding ;
-    BindElement *VDMOSCktTtpBinding ;
-    BindElement *VDMOSTpcktTBinding ;
+    BindElement *VDMOSDevTdevTBinding ;
+    BindElement *VDMOSDevTtpBinding ;
+    BindElement *VDMOSTpdevTBinding ;
 #endif
 
 } VDMOSinstance ;

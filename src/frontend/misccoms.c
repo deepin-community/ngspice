@@ -194,7 +194,7 @@ com_version(wordlist *wl)
 
                 "** The U. C. Berkeley CAD Group\n"
                 "** Copyright 1985-1994, Regents of the University of California.\n"
-                "** Copyright 2001-2024, The ngspice team.\n"
+                "** Copyright 2001-2025, The ngspice team.\n"
                 "** %s\n",
                 ft_sim->simulator, ft_sim->version, ft_sim->description, Spice_Manual);
         if (*Spice_Notice != '\0')
@@ -238,7 +238,7 @@ com_version(wordlist *wl)
 
                     "** The U. C. Berkeley CAD Group\n"
                     "** Copyright 1985-1994, Regents of the University of California.\n"
-                    "** Copyright 2001-2024, The ngspice team.\n"
+                    "** Copyright 2001-2025, The ngspice team.\n"
                     "** %s\n",
                     ft_sim->simulator, ft_sim->version, ft_sim->description, Spice_Manual);
             if (*Spice_Notice != '\0')
@@ -255,9 +255,6 @@ com_version(wordlist *wl)
             fprintf(cp_out, "** Relevant compilation options (refer to user's manual):\n");
 #ifdef NGDEBUG
             fprintf(cp_out, "** Debugging option (-g) enabled\n");
-#endif
-#ifdef ADMS
-            fprintf(cp_out, "** Adms interface enabled\n");
 #endif
 #ifdef USE_OMP
             fprintf(cp_out, "** OpenMP multithreading for BSIM3, BSIM4 enabled\n");
@@ -276,9 +273,6 @@ com_version(wordlist *wl)
 #endif
 #ifdef PREDICTOR
             fprintf(cp_out, "** --enable-predictor\n");
-#endif
-#ifdef NEWTRUNC
-            fprintf(cp_out, "** --enable-newtrunc\n");
 #endif
 #ifdef WANT_SENSE2
             fprintf(cp_out, "** --enable-sense2\n");

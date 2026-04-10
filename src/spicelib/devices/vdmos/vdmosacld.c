@@ -48,7 +48,8 @@ VDMOSacLoad(GENmodel *inModel, CKTcircuit *ckt)
                 GmT = model->VDMOStype * here->VDMOSgmT;
                 cgT  = model->VDMOStype * here->VDMOScgT;
                 cdT  = model->VDMOStype * here->VDMOScdT;
-                cTt = model->VDMOScthj;
+                // Everything is computed for m parallel instances... so scale cthj accordingly
+                cTt = here->VDMOSm * model->VDMOScthj;
                 gTtg  = here->VDMOSgtempg;
                 gTtdp = here->VDMOSgtempd;
                 gTtt  = here->VDMOSgtempT;
@@ -57,7 +58,8 @@ VDMOSacLoad(GENmodel *inModel, CKTcircuit *ckt)
                 GmT = -model->VDMOStype * here->VDMOSgmT;
                 cgT  = -model->VDMOStype * here->VDMOScgT;
                 cdT  = -model->VDMOStype * here->VDMOScdT;
-                cTt = -model->VDMOScthj;
+                // Everything is computed for m parallel instances... so scale cthj accordingly
+                cTt = - here->VDMOSm * model->VDMOScthj;
                 gTtg  = -here->VDMOSgtempg;
                 gTtdp = -here->VDMOSgtempd;
                 gTtt  = -here->VDMOSgtempT;
@@ -96,8 +98,8 @@ VDMOSacLoad(GENmodel *inModel, CKTcircuit *ckt)
             *(here->VDMOSDPgpPtr +1) -= xgd;
             *(here->VDMOSSPgpPtr +1) -= xgs;
 
-            *(here->VDMOSDdPtr) += here->VDMOSdrainConductance;
-            *(here->VDMOSSsPtr) += here->VDMOSsourceConductance;
+            *(here->VDMOSDdPtr) += here->VDMOSdrainConductance + here->VDMOSdsConductance;
+            *(here->VDMOSSsPtr) += here->VDMOSsourceConductance + here->VDMOSdsConductance;
             *(here->VDMOSDPdpPtr) += here->VDMOSdrainConductance+
                     here->VDMOSgds+xrev*(here->VDMOSgm);
             *(here->VDMOSSPspPtr) += here->VDMOSsourceConductance+
@@ -110,6 +112,8 @@ VDMOSacLoad(GENmodel *inModel, CKTcircuit *ckt)
             *(here->VDMOSSPgpPtr) -= (xnrm-xrev)*here->VDMOSgm;
             *(here->VDMOSSPsPtr) -= here->VDMOSsourceConductance;
             *(here->VDMOSSPdpPtr) -= here->VDMOSgds+xrev*(here->VDMOSgm);
+            *(here->VDMOSDsPtr) += (-here->VDMOSdsConductance);
+            *(here->VDMOSSdPtr) += (-here->VDMOSdsConductance);
             /* gate resistor */
             *(here->VDMOSGgPtr) += (here->VDMOSgateConductance);
             *(here->VDMOSGPgpPtr) += (here->VDMOSgateConductance);
@@ -129,21 +133,23 @@ VDMOSacLoad(GENmodel *inModel, CKTcircuit *ckt)
             *(here->VDIORPdPtr +1) -= xceq;
             if (selfheat)
             {
-               *(here->VDMOSDPtempPtr)       += GmT;
+                // Everything is computed for m parallel instances... so scale gthjc and gthja accordingly
+                double gthjc = here->VDMOSm / model->VDMOSrthjc;
+                double gthca = here->VDMOSm / model->VDMOSrthca;
+               *(here->VDMOSDPtempPtr)       +=  GmT;
                *(here->VDMOSSPtempPtr)       += -GmT;
-
-               *(here->VDMOSTemptempPtr)     += gTtt + 1/model->VDMOSrthjc;
-               *(here->VDMOSTempgpPtr)       += gTtg;
-               *(here->VDMOSTempdpPtr)       += gTtdp;
-               *(here->VDMOSTempspPtr)       += gTtsp;
-               *(here->VDMOSTemptcasePtr)    += -1/model->VDMOSrthjc;
-               *(here->VDMOSTcasetempPtr)    += -1/model->VDMOSrthjc;
-               *(here->VDMOSTcasetcasePtr)   +=  1/model->VDMOSrthjc + 1/model->VDMOSrthca;
-               *(here->VDMOSTptpPtr)         +=  1/model->VDMOSrthca;
-               *(here->VDMOSTptcasePtr)      += -1/model->VDMOSrthca;
-               *(here->VDMOSTcasetpPtr)      += -1/model->VDMOSrthca;
-               *(here->VDMOSCktTtpPtr)       +=  1.0;
-               *(here->VDMOSTpcktTPtr)       +=  1.0;
+               *(here->VDMOSTemptempPtr)     +=  gTtt + gthjc;
+               *(here->VDMOSTempgpPtr)       +=  gTtg;
+               *(here->VDMOSTempdpPtr)       +=  gTtdp;
+               *(here->VDMOSTempspPtr)       +=  gTtsp;
+               *(here->VDMOSTemptcasePtr)    += -gthjc;
+               *(here->VDMOSTcasetempPtr)    += -gthjc;
+               *(here->VDMOSTcasetcasePtr)   +=  gthjc + gthca;
+               *(here->VDMOSTptpPtr)         +=  gthca;
+               *(here->VDMOSTptcasePtr)      += -gthca;
+               *(here->VDMOSTcasetpPtr)      += -gthca;
+               *(here->VDMOSDevTtpPtr)       +=  1.0;
+               *(here->VDMOSTpdevTPtr)       +=  1.0;
 
                *(here->VDMOSTemptempPtr + 1) += xcTt;
                *(here->VDMOSDPtempPtr + 1)   += xcdT;

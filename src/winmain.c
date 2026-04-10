@@ -1340,7 +1340,9 @@ wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR
     /* Wait until everything is settled */
     WaitForIdle();
 
-    /* Go to main() */
+    /* Parsing the command line.
+       This is the next major step:
+       Go to main() for reading the start command line and preparing the simulator. */
     nReturnCode = xmain(argc, argv);
 
 THE_END:
@@ -1497,7 +1499,7 @@ win_x_fprintf(FILE *stream, const char *format, ...)
     if ((stream == stdout) || (stream == stderr)) {
 
         s[0] = SE;
-        result = vsprintf(s, format, args);
+        result = vsnprintf(s, IOBufSize, format, args);
         win_x_fputs(s, stream);
     } else
         result = vfprintf(stream, format, args);

@@ -27,7 +27,7 @@ static int osdi_param_access(OsdiParamOpvar *param_info, bool write_value,
     len = sizeof(double);
     if (param_info->len) {
       len *= param_info->len;
-      val_ptr = &value->v.vec.rVec;
+      val_ptr = value->v.vec.rVec;
     } else {
       val_ptr = &value->rValue;
     }
@@ -36,7 +36,7 @@ static int osdi_param_access(OsdiParamOpvar *param_info, bool write_value,
     len = sizeof(int);
     if (param_info->len) {
       len *= param_info->len;
-      val_ptr = &value->v.vec.iVec;
+      val_ptr = value->v.vec.iVec;
     } else {
       val_ptr = &value->iValue;
     }
@@ -45,7 +45,7 @@ static int osdi_param_access(OsdiParamOpvar *param_info, bool write_value,
     len = sizeof(char *);
     if (param_info->len) {
       len *= param_info->len;
-      val_ptr = &value->v.vec.cVec;
+      val_ptr = value->v.vec.cVec;
     } else {
       val_ptr = &value->cValue;
     }
@@ -64,7 +64,9 @@ static int osdi_param_access(OsdiParamOpvar *param_info, bool write_value,
 
 static int osdi_write_param(void *dst, IFvalue *value, int param,
                             const OsdiDescriptor *descr) {
-  if (dst == NULL) {
+  // value may be NULL as a result of a bad parse from INPgetValue
+  // catch it before dereferencing it
+  if (dst == NULL || value == NULL) {
     return (E_PANIC);
   }
 
@@ -127,7 +129,7 @@ extern int OSDImParam(int param, IFvalue *value, GENmodel *modelPtr) {
 
 static int osdi_read_param(void *src, IFvalue *value, int id,
                            const OsdiDescriptor *descr) {
-  if (src == NULL) {
+  if (src == NULL || value == NULL) {
     return (E_PANIC);
   }
 
@@ -160,5 +162,23 @@ extern int OSDIask(CKTcircuit *ckt, GENinstance *instPtr, int id,
   }
 
   void *src = descr->access(inst, model, (uint32_t)id, flags);
+  return osdi_read_param(src, value, id, descr);
+}
+
+extern int OSDImAsk(CKTcircuit *ckt, GENmodel *modelPtr, int id,
+                   IFvalue *value) {
+
+  NG_IGNORE(ckt);
+
+  OsdiRegistryEntry *entry = osdi_reg_entry_model(modelPtr);
+  const OsdiDescriptor *descr = entry->descriptor;
+
+  void *model = osdi_model_data(modelPtr);
+
+  if (id >= (int)(descr->num_params)) {
+    return (E_BADPARM);
+  }
+
+  void *src = descr->access(NULL, model, (uint32_t)id, ACCESS_FLAG_READ);
   return osdi_read_param(src, value, id, descr);
 }
